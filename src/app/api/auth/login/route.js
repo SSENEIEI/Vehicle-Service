@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-// Require JWT secret from environment (no dev fallback)
+import { query, initDatabase } from "@/lib/db";
+
 const SECRET_KEY = process.env.JWT_SECRET;
 if (!SECRET_KEY) {
   throw new Error("Missing JWT_SECRET env var");
@@ -10,78 +10,53 @@ if (!SECRET_KEY) {
 
 export async function POST(request) {
   try {
+    await initDatabase();
     const { username, password } = await request.json();
+    const trimmedUsername = String(username || "").trim();
+    const rawPassword = String(password || "").trim();
 
-    // Development bypass: allow a fixed account without hitting the database
-    if (username === "adminga" && password === "12345") {
-      const isAdmin = true;
-      const user = { id: 0, username: "adminga", department: "AC", isAdmin, is_super_admin: 1, plant_id: null, department_id: null };
-      const token = jwt.sign(
-        {
-          userId: user.id,
-          username: user.username,
-          department: user.department,
-          isAdmin,
-          is_super_admin: 1,
-          plant_id: null,
-          department_id: null,
-        },
-        SECRET_KEY,
-        { expiresIn: "1d" }
-      );
-      return NextResponse.json({ token, user });
+    if (!trimmedUsername || !rawPassword) {
+      return NextResponse.json({ error: "กรุณากรอกชื่อผู้ใช้และรหัสผ่าน" }, { status: 400 });
     }
 
-  const users = await query("SELECT * FROM users WHERE username = ?", [username]);
+    const users = await query(
+      "SELECT id, username, password_hash, full_name, email, role, status FROM users WHERE username = ?",
+      [trimmedUsername]
+    );
 
-    if (users.length === 0)
+    if (!users.length) {
       return NextResponse.json({ error: "ไม่พบผู้ใช้" }, { status: 404 });
+    }
 
     const user = users[0];
-    const isValid = await bcrypt.compare(password, user.password);
+    if (user.status && user.status !== "active") {
+      return NextResponse.json({ error: "บัญชีนี้ถูกระงับการใช้งาน" }, { status: 403 });
+    }
 
-    if (!isValid)
-      return NextResponse.json(
-        { error: "รหัสผ่านไม่ถูกต้อง" },
-        { status: 401 }
-      );
+    const isValid = await bcrypt.compare(rawPassword, user.password_hash);
+    if (!isValid) {
+      return NextResponse.json({ error: "รหัสผ่านไม่ถูกต้อง" }, { status: 401 });
+    }
 
-  // Use role flags if present; fallback to legacy check
-  const isAdmin = !!user.is_admin || (user.username === "adminscrap" && user.department === "AC");
+    const payload = {
+      userId: user.id,
+      username: user.username,
+      fullName: user.full_name,
+      email: user.email,
+      role: user.role,
+    };
 
-    // Load multi-departments for the user
-    let department_ids = [];
-    try {
-      const rows = await query('SELECT department_id FROM user_departments WHERE user_id = ?', [user.id]);
-      department_ids = rows.map(r => r.department_id);
-    } catch {}
-
-    const token = jwt.sign(
-      {
-        userId: user.id,
-        username: user.username,
-        department: user.department,
-        isAdmin,
-        is_super_admin: !!user.is_super_admin,
-        plant_id: user.plant_id || null,
-        department_id: user.department_id || null,
-        department_ids,
-      },
-      SECRET_KEY,
-      { expiresIn: "1d" }
-    );
+    const token = jwt.sign(payload, SECRET_KEY, { expiresIn: "1d" });
 
     return NextResponse.json({
       token,
       user: {
         id: user.id,
         username: user.username,
-        department: user.department,
-        isAdmin,
-        is_super_admin: !!user.is_super_admin,
-        plant_id: user.plant_id || null,
-        department_id: user.department_id || null,
-        department_ids,
+        fullName: user.full_name,
+        email: user.email,
+        role: user.role,
+        status: user.status,
       },
     });
   } catch (error) {

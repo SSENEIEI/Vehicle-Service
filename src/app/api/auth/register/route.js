@@ -1,17 +1,32 @@
-//src\app\api\auth\register\route.js
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { query, initDatabase } from "@/lib/db";
+
+const ALLOWED_ROLES = new Set(["admin", "staff", "viewer"]);
 
 export async function POST(request) {
   try {
-    const { username, password, department } = await request.json();
+    await initDatabase();
+    const body = await request.json();
+    const username = String(body.username || "").trim();
+    const password = String(body.password || "").trim();
+    const fullName = body.fullName ? String(body.fullName).trim() : null;
+    const email = body.email ? String(body.email).trim() : null;
+    const role = ALLOWED_ROLES.has(body.role) ? body.role : "staff";
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    if (!username || !password) {
+      return NextResponse.json({ error: "กรุณาระบุ username และ password" }, { status: 400 });
+    }
 
+    const duplicate = await query("SELECT id FROM users WHERE username = ?", [username]);
+    if (duplicate.length) {
+      return NextResponse.json({ error: "ชื่อผู้ใช้นี้มีอยู่แล้ว" }, { status: 409 });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
     await query(
-      "INSERT INTO users (username, password, department, is_admin, is_super_admin) VALUES (?, ?, ?, 0, 0)",
-      [username, hashedPassword, department]
+      "INSERT INTO users (username, password_hash, full_name, email, role) VALUES (?, ?, ?, ?, ?)",
+      [username, passwordHash, fullName, email, role]
     );
 
     return NextResponse.json({ message: "สมัครสมาชิกสำเร็จ" }, { status: 201 });
