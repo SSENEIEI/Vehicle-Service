@@ -12,8 +12,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "Bus System",
-  description: "Bus management system",
+  title: "Vehicle Service",
+  description: "Vehicle Service platform",
 };
 
 export default function RootLayout({ children }) {

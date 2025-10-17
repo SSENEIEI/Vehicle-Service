@@ -1,35 +1,38 @@
 "use client";
 
+import Image from "next/image";
+
 const styles = {
   page: {
     minHeight: "100vh",
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f4f7fc",
+    backgroundColor: "#f0f4fb",
     fontFamily: "'Arial', 'Helvetica', sans-serif",
   },
   card: {
-    width: "360px",
-    backgroundColor: "#eef1f6",
-    borderRadius: "28px",
-    padding: "48px 42px",
-    boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08)",
+    width: "500px",
+    maxWidth: "94vw",
+    backgroundColor: "#e8edf4",
+    borderRadius: "36px",
+    padding: "58px 72px 66px",
+    boxShadow: "0 18px 36px rgba(15, 43, 85, 0.16)",
     display: "flex",
     flexDirection: "column",
     alignItems: "center",
-    gap: "24px",
+    gap: "36px",
   },
   header: {
     display: "flex",
     alignItems: "center",
-    gap: "14px",
+    gap: "18px",
     color: "#0f4ea2",
   },
   icon: {
-    width: "56px",
-    height: "56px",
-    borderRadius: "16px",
+    width: "64px",
+    height: "64px",
+    borderRadius: "18px",
     backgroundColor: "#0f4ea2",
     display: "flex",
     justifyContent: "center",
@@ -37,43 +40,44 @@ const styles = {
   },
   title: {
     margin: 0,
-    fontSize: "28px",
+    fontSize: "32px",
     fontWeight: "800",
-    letterSpacing: "0.5px",
+    letterSpacing: "0.6px",
   },
   form: {
     width: "100%",
     display: "flex",
     flexDirection: "column",
-    gap: "18px",
+    gap: "22px",
   },
   label: {
     display: "block",
-    fontSize: "16px",
+    fontSize: "18px",
     fontWeight: "700",
-    color: "#114b9c",
-    marginBottom: "6px",
+    color: "#0f4ea2",
+    marginBottom: "10px",
   },
   input: {
     width: "100%",
-    height: "52px",
-    borderRadius: "18px",
-    border: "2px solid #1c5ec2",
-    padding: "0 18px",
-    fontSize: "15px",
-    color: "#1c2b4d",
+    height: "60px",
+    borderRadius: "20px",
+    border: "2px solid #1b55aa",
+    padding: "0 22px",
+    fontSize: "17px",
+    color: "#16305f",
     outline: "none",
     backgroundColor: "#ffffff",
   },
   button: {
     width: "100%",
-    height: "56px",
-    borderRadius: "18px",
+    height: "62px",
+    borderRadius: "20px",
     border: "none",
     backgroundColor: "#0553b3",
     color: "#ffffff",
-    fontSize: "20px",
+    fontSize: "22px",
     fontWeight: "800",
+    letterSpacing: "0.5px",
     cursor: "pointer",
     transition: "background-color 0.2s ease",
   },
@@ -85,19 +89,7 @@ export default function Home() {
       <section style={styles.card}>
         <header style={styles.header}>
           <span style={styles.icon}>
-            <svg
-              width="28"
-              height="28"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                d="M7.5 6.5c.5-1.6 1.9-2.5 4.5-2.5s3.9.9 4.5 2.5l1.8 5.4c.4 1.1-.5 2.1-1.6 2.1h-9.4c-1.1 0-2-1-1.6-2.1L7.5 6.5z"
-                fill="#ffffff"
-              />
-              <rect x="5" y="14" width="14" height="5" rx="2.5" fill="#ffffff" />
-            </svg>
+            <Image src="/car-solid-full.svg" alt="Car icon" width={36} height={36} priority />
           </span>
           <h1 style={styles.title}>ระบบจองรถยนต์</h1>
         </header>
