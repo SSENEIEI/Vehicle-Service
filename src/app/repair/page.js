@@ -1,3 +1,4 @@
+import Link from "next/link";
 import DashboardShell from "@/components/DashboardShell";
 import { menuItems } from "@/lib/menuItems";
 import { FaScrewdriverWrench } from "react-icons/fa6";
@@ -33,6 +34,7 @@ const actionStyles = {
     backgroundColor,
     cursor: "pointer",
     boxShadow: "0 14px 28px rgba(12, 74, 161, 0.18)",
+    textDecoration: "none",
   }),
   subtitle: (color) => ({
     fontSize: "16px",
@@ -42,13 +44,14 @@ const actionStyles = {
 };
 
 const actionButtons = [
-  { label: "แจ้งซ่อม", background: "#0d5fbf" },
-  { label: "ติดตามงานซ่อม", background: "#0d5fbf" },
+  { label: "แจ้งซ่อม", background: "#0d5fbf", href: "/repair/report" },
+  { label: "ติดตามงานซ่อม", background: "#0d5fbf", href: "/repair/tracking" },
   {
     label: "ประมูลซ่อมรถ",
     background: "#1b7c3a",
     subtitle: "(สำหรับ Vendor)",
     subtitleColor: "#ffd54f",
+    href: "/repair/bidding",
   },
 ];
 
@@ -61,16 +64,16 @@ export default function RepairPage() {
     >
       <div style={actionStyles.wrapper}>
         {actionButtons.map((action) => (
-          <button
+          <Link
             key={action.label}
-            type="button"
+            href={action.href}
             style={actionStyles.button(action.background)}
           >
             <span>{action.label}</span>
             {action.subtitle ? (
               <span style={actionStyles.subtitle(action.subtitleColor || "#ffffff")}>{action.subtitle}</span>
             ) : null}
-          </button>
+          </Link>
         ))}
       </div>
     </DashboardShell>
