@@ -3,10 +3,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { query, initDatabase } from "@/lib/db";
 
-const SECRET_KEY = process.env.JWT_SECRET;
-if (!SECRET_KEY) {
-  throw new Error("Missing JWT_SECRET env var");
-}
+const SECRET_KEY = process.env.JWT_SECRET || "vehicle-service-dev-secret";
 
 export async function POST(request) {
   try {

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
 
 const styles = {
@@ -81,9 +82,86 @@ const styles = {
     cursor: "pointer",
     transition: "background-color 0.2s ease",
   },
+  buttonDisabled: {
+    backgroundColor: "#93b5de",
+    cursor: "not-allowed",
+  },
+  message: {
+    marginTop: "6px",
+    fontSize: "16px",
+    fontWeight: "600",
+    textAlign: "center",
+  },
 };
 
 export default function Home() {
+  const [formData, setFormData] = useState({ username: "", password: "" });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState({ type: null, text: "" });
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((current) => ({ ...current, [name]: value }));
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (isSubmitting) return;
+
+    setIsSubmitting(true);
+    setFeedback({ type: null, text: "" });
+
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: formData.username.trim(),
+          password: formData.password,
+        }),
+      });
+
+      let payload = {};
+      let rawBody = "";
+      try {
+        rawBody = await response.text();
+        const contentType = response.headers.get("content-type") || "";
+        const candidate = rawBody.trim();
+
+        if (!candidate) {
+          payload = {};
+        } else if (contentType.includes("application/json")) {
+          payload = JSON.parse(candidate);
+        } else if (candidate.startsWith("{") || candidate.startsWith("[")) {
+          payload = JSON.parse(candidate);
+        } else {
+          setFeedback({ type: "error", text: "เซิร์ฟเวอร์ตอบกลับไม่ใช่ JSON" });
+          return;
+        }
+      } catch (parseError) {
+        console.error("Login response parsing failed", parseError, rawBody);
+        setFeedback({ type: "error", text: "เซิร์ฟเวอร์ตอบกลับไม่ถูกต้อง" });
+        return;
+      }
+
+      if (!response.ok) {
+        const errorText = payload?.error || "ไม่สามารถเข้าสู่ระบบได้";
+        setFeedback({ type: "error", text: errorText });
+        return;
+      }
+
+  window.alert("เข้าสู่ระบบสำเร็จ");
+  setFeedback({ type: "success", text: "ลงชื่อเข้าใช้สำเร็จ" });
+  setFormData({ username: "", password: "" });
+  window.location.href = "/company-booking";
+    } catch (error) {
+      console.error("Login request failed", error);
+      setFeedback({ type: "error", text: "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง" });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <main style={styles.page}>
       <section style={styles.card}>
@@ -94,20 +172,58 @@ export default function Home() {
           <h1 style={styles.title}>ระบบจองรถยนต์</h1>
         </header>
 
-        <form style={styles.form}>
+        <form style={styles.form} onSubmit={handleSubmit}>
           <label style={styles.label} htmlFor="username">
             Username:
           </label>
-          <input style={styles.input} id="username" name="username" type="text" />
+          <input
+            style={styles.input}
+            id="username"
+            name="username"
+            type="text"
+            autoComplete="username"
+            value={formData.username}
+            onChange={handleChange}
+            disabled={isSubmitting}
+            required
+          />
 
           <label style={styles.label} htmlFor="password">
             Password:
           </label>
-          <input style={styles.input} id="password" name="password" type="password" />
+          <input
+            style={styles.input}
+            id="password"
+            name="password"
+            type="password"
+            autoComplete="current-password"
+            value={formData.password}
+            onChange={handleChange}
+            disabled={isSubmitting}
+            required
+          />
 
-          <button style={styles.button} type="submit">
-            เข้าสู่ระบบ
+          <button
+            style={{
+              ...styles.button,
+              ...(isSubmitting ? styles.buttonDisabled : null),
+            }}
+            type="submit"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? "กำลังตรวจสอบ..." : "เข้าสู่ระบบ"}
           </button>
+
+          {feedback.text ? (
+            <p
+              style={{
+                ...styles.message,
+                color: feedback.type === "error" ? "#c0392b" : "#1b5e20",
+              }}
+            >
+              {feedback.text}
+            </p>
+          ) : null}
         </form>
       </section>
     </main>
