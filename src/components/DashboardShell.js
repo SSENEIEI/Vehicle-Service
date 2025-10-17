@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { FaArrowLeft } from "react-icons/fa";
+import { FaArrowLeft, FaBars, FaTimes } from "react-icons/fa";
 import { FaChevronRight } from "react-icons/fa6";
 
 const colors = {
@@ -112,6 +113,25 @@ const styles = {
     fontSize: "24px",
     fontWeight: "800",
   },
+  topBarLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: "18px",
+  },
+  menuToggleButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "46px",
+    height: "46px",
+    borderRadius: "14px",
+    border: "none",
+    backgroundColor: colors.primary,
+    color: "#ffffff",
+    cursor: "pointer",
+    boxShadow: "0 6px 18px rgba(12, 74, 161, 0.25)",
+    transition: "background-color 0.2s ease",
+  },
   welcome: {
     color: colors.primary,
     fontSize: "18px",
@@ -130,50 +150,124 @@ const styles = {
   },
 };
 
-export default function DashboardShell({ menuItems, headerIcon, headerSubtitle, children }) {
+export default function DashboardShell({
+  menuItems,
+  headerIcon,
+  headerSubtitle,
+  children,
+  sidebarMode = "static",
+}) {
   const router = useRouter();
   const pathname = usePathname();
+  const isOverlaySidebar = sidebarMode === "overlay";
+  const [isSidebarOpen, setIsSidebarOpen] = useState(!isOverlaySidebar);
+
+  const containerStyle = {
+    ...styles.page,
+    display: isOverlaySidebar ? "block" : styles.page.display,
+    position: "relative",
+  };
+
+  const overlaySidebarStyles = isOverlaySidebar
+    ? {
+        position: "fixed",
+        top: 0,
+        left: isSidebarOpen ? 0 : -320,
+        height: "100vh",
+        width: "280px",
+        transition: "left 0.3s ease",
+        zIndex: 30,
+      }
+    : {};
+
+  const overlayBackdropStyles = isOverlaySidebar
+    ? {
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        backgroundColor: "rgba(8, 18, 45, 0.4)",
+        opacity: isSidebarOpen ? 1 : 0,
+        visibility: isSidebarOpen ? "visible" : "hidden",
+        transition: "opacity 0.3s ease, visibility 0.3s ease",
+        zIndex: 20,
+      }
+    : null;
+
+  const contentAreaStyle = {
+    ...styles.contentArea,
+    marginLeft: isOverlaySidebar ? 0 : undefined,
+  };
+
+  const sidebarContent = (
+    <>
+      <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+        <button type="button" style={styles.backButton} onClick={() => router.push("/")}>
+          <FaArrowLeft /> กลับเมนูหลัก
+        </button>
+        <button type="button" style={styles.languageToggle}>
+          EN
+        </button>
+      </div>
+
+      <div>
+        <p style={styles.menuTitle}>เมนู</p>
+        <ul style={styles.menuList}>
+          {menuItems.map((item) => {
+            const isActive = pathname === item.path;
+
+            return (
+              <li key={item.path} style={styles.menuItem(isActive)}>
+                <span style={styles.menuIcon}>{item.icon}</span>
+                <Link
+                  href={item.path}
+                  style={{ flex: 1, color: "inherit", textDecoration: "none" }}
+                >
+                  {item.label}
+                </Link>
+                {isActive ? <FaChevronRight size={14} /> : null}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </>
+  );
+
+  const handleToggleSidebar = () => {
+    if (isOverlaySidebar) {
+      setIsSidebarOpen((prev) => !prev);
+    }
+  };
 
   return (
-    <main style={styles.page}>
-      <aside style={styles.sidebar}>
-        <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          <button type="button" style={styles.backButton} onClick={() => router.push("/")}>
-            <FaArrowLeft /> กลับเมนูหลัก
-          </button>
-          <button type="button" style={styles.languageToggle}>
-            EN
-          </button>
-        </div>
+    <main style={containerStyle}>
+      {isOverlaySidebar ? (
+        <>
+          <div
+            role="presentation"
+            style={overlayBackdropStyles}
+            onClick={() => setIsSidebarOpen(false)}
+          />
+          <aside style={{ ...styles.sidebar, ...overlaySidebarStyles }}>{sidebarContent}</aside>
+        </>
+      ) : (
+        <aside style={styles.sidebar}>{sidebarContent}</aside>
+      )}
 
-        <div>
-          <p style={styles.menuTitle}>เมนู</p>
-          <ul style={styles.menuList}>
-            {menuItems.map((item) => {
-              const isActive = pathname === item.path;
-
-              return (
-                <li key={item.path} style={styles.menuItem(isActive)}>
-                  <span style={styles.menuIcon}>{item.icon}</span>
-                  <Link
-                    href={item.path}
-                    style={{ flex: 1, color: "inherit", textDecoration: "none" }}
-                  >
-                    {item.label}
-                  </Link>
-                  {isActive ? <FaChevronRight size={14} /> : null}
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      </aside>
-
-      <section style={styles.contentArea}>
+      <section style={contentAreaStyle}>
         <header style={styles.topBar}>
-          <div style={styles.topBarTitle}>
-            {headerIcon}
-            Vehicle Service <span style={{ fontWeight: "600" }}>{headerSubtitle}</span>
+          <div style={styles.topBarLeft}>
+            {isOverlaySidebar ? (
+              <button type="button" style={styles.menuToggleButton} onClick={handleToggleSidebar}>
+                {isSidebarOpen ? <FaTimes size={20} /> : <FaBars size={20} />}
+              </button>
+            ) : null}
+            <div style={styles.topBarTitle}>
+              {headerIcon}
+              Vehicle Service <span style={{ fontWeight: "600" }}>{headerSubtitle}</span>
+            </div>
           </div>
           <p style={styles.welcome}>ยินดีต้อนรับ Admin SAC (AC)</p>
         </header>
