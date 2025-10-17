@@ -10,6 +10,7 @@ import {
   FaClipboardList,
   FaUsers,
   FaChevronRight,
+  FaUserGear,
 } from "react-icons/fa6";
 import { FaArrowLeft } from "react-icons/fa";
 
@@ -361,6 +362,7 @@ const menuItems = [
   { label: "แผนจัดรถประจำวัน", icon: <FaCalendarDay size={22} /> },
   { label: "แผนการใช้รถภาพรวม", icon: <FaClipboardList size={22} /> },
   { label: "รถและพนักงานบริษัทฯ", icon: <FaUsers size={22} /> },
+  { label: "จัดการผู้ใช้", icon: <FaUserGear size={22} /> },
 ];
 
 function LabeledField({ label, required = false, children }) {
