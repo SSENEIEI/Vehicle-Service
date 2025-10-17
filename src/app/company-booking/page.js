@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
 import {
   FaCarSide,
   FaKey,
@@ -354,8 +355,8 @@ const styles = {
 };
 
 const menuItems = [
-  { label: "จองรถบริษัทฯ", icon: <FaCarSide size={24} /> },
-  { label: "จองรถเช่า", icon: <FaKey size={22} /> },
+  { label: "จองรถบริษัทฯ", icon: <FaCarSide size={24} />, path: "/company-booking" },
+  { label: "จองรถเช่า", icon: <FaKey size={22} />, path: "/rental-booking" },
   { label: "ซ่อมรถ", icon: <FaScrewdriverWrench size={22} /> },
   { label: "แผนจัดรถประจำวัน", icon: <FaCalendarDay size={22} /> },
   { label: "แผนการใช้รถภาพรวม", icon: <FaClipboardList size={22} /> },
@@ -375,11 +376,18 @@ function LabeledField({ label, required = false, children }) {
 }
 
 export default function CompanyBookingPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+
   return (
     <main style={styles.page}>
       <aside style={styles.sidebar}>
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-          <button type="button" style={styles.backButton}>
+          <button
+            type="button"
+            style={styles.backButton}
+            onClick={() => router.push("/")}
+          >
             <FaArrowLeft /> กลับเมนูหลัก
           </button>
           <button type="button" style={styles.languageToggle}>
@@ -390,13 +398,21 @@ export default function CompanyBookingPage() {
         <div>
           <p style={styles.menuTitle}>เมนู</p>
           <ul style={styles.menuList}>
-            {menuItems.map((item, index) => (
-              <li key={item.label} style={styles.menuItem(index === 0)}>
-                <span style={styles.menuIcon}>{item.icon}</span>
-                <span style={{ flex: 1 }}>{item.label}</span>
-                {index === 0 ? <FaChevronRight size={14} /> : null}
-              </li>
-            ))}
+            {menuItems.map((item) => {
+              const isActive = item.path ? pathname === item.path : false;
+
+              return (
+                <li
+                  key={item.label}
+                  style={styles.menuItem(isActive)}
+                  onClick={item.path ? () => router.push(item.path) : undefined}
+                >
+                  <span style={styles.menuIcon}>{item.icon}</span>
+                  <span style={{ flex: 1 }}>{item.label}</span>
+                  {isActive ? <FaChevronRight size={14} /> : null}
+                </li>
+              );
+            })}
           </ul>
         </div>
       </aside>
