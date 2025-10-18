@@ -369,7 +369,11 @@ const styles = {
     const router = useRouter();
     const pathname = usePathname();
     const [userRole, setUserRole] = useState(DEFAULT_ROLE);
-    const [displayName, setDisplayName] = useState("");
+    const [profileSummary, setProfileSummary] = useState({
+      name: "",
+      department: "",
+      factory: "",
+    });
 
     useEffect(() => {
       try {
@@ -386,9 +390,17 @@ const styles = {
             parsedProfile?.name ||
             parsedProfile?.username ||
             "";
-          if (nameCandidate) {
-            setDisplayName(nameCandidate);
-          }
+          setProfileSummary({
+            name: nameCandidate || "",
+            department:
+              parsedProfile?.departmentName ||
+              parsedProfile?.department ||
+              "",
+            factory:
+              parsedProfile?.factoryName ||
+              parsedProfile?.factory ||
+              "",
+          });
         }
       } catch (error) {
         console.warn("Failed to restore stored session", error);
@@ -398,7 +410,22 @@ const styles = {
     const normalizedRole = normalizeRole(userRole);
     const visibleMenuItems = useMemo(() => getMenuItemsForRole(normalizedRole), [normalizedRole]);
     const roleLabel = ROLE_LABELS[normalizedRole] || normalizedRole;
-    const welcomeText = displayName ? `${displayName} (${roleLabel})` : roleLabel;
+    let welcomeText;
+    if (normalizedRole === "admin") {
+      welcomeText = "ผู้ดูแลระบบ";
+    } else {
+      const baseName = profileSummary.name || roleLabel;
+      let composed = baseName;
+      if (profileSummary.department) {
+        composed += ` ${profileSummary.department}`;
+      }
+      if (profileSummary.factory) {
+        composed += ` (${profileSummary.factory})`;
+      } else if (!profileSummary.department && roleLabel && roleLabel !== baseName) {
+        composed += ` (${roleLabel})`;
+      }
+      welcomeText = composed;
+    }
 
     return (
       <main style={styles.page}>

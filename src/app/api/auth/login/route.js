@@ -17,7 +17,25 @@ export async function POST(request) {
     }
 
     const users = await query(
-      "SELECT id, username, password_hash, email, role, status FROM users WHERE username = ?",
+      `SELECT
+         u.id,
+         u.username,
+         u.password_hash AS passwordHash,
+         u.email,
+         u.role,
+         u.status,
+         u.factory_id AS factoryId,
+         f.name AS factoryName,
+         u.department_id AS departmentId,
+         d.name AS departmentName,
+         u.division_id AS divisionId,
+         dv.name AS divisionName
+       FROM users u
+       LEFT JOIN factories f ON u.factory_id = f.id
+       LEFT JOIN departments d ON u.department_id = d.id
+       LEFT JOIN divisions dv ON u.division_id = dv.id
+       WHERE u.username = ?
+       LIMIT 1`,
       [trimmedUsername]
     );
 
@@ -30,7 +48,7 @@ export async function POST(request) {
       return NextResponse.json({ error: "บัญชีนี้ถูกระงับการใช้งาน" }, { status: 403 });
     }
 
-    const isValid = await bcrypt.compare(rawPassword, user.password_hash);
+    const isValid = await bcrypt.compare(rawPassword, user.passwordHash);
     if (!isValid) {
       return NextResponse.json({ error: "รหัสผ่านไม่ถูกต้อง" }, { status: 401 });
     }
@@ -52,6 +70,12 @@ export async function POST(request) {
         email: user.email,
         role: user.role,
         status: user.status,
+        factoryId: user.factoryId,
+        factoryName: user.factoryName,
+        departmentId: user.departmentId,
+        departmentName: user.departmentName,
+        divisionId: user.divisionId,
+        divisionName: user.divisionName,
       },
     });
   } catch (error) {
