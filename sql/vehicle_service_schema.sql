@@ -27,26 +27,28 @@ CREATE TABLE IF NOT EXISTS `factories` (
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS `departments` (
+CREATE TABLE IF NOT EXISTS `divisions` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `factory_id` INT NOT NULL,
   `name` VARCHAR(100) NOT NULL,
   `description` TEXT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY `uniq_factory_department` (`factory_id`, `name`),
-  CONSTRAINT `fk_departments_factory` FOREIGN KEY (`factory_id`) REFERENCES `factories`(`id`) ON DELETE CASCADE
+  UNIQUE KEY `uniq_factory_division` (`factory_id`, `name`),
+  CONSTRAINT `fk_divisions_factory` FOREIGN KEY (`factory_id`) REFERENCES `factories`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-CREATE TABLE IF NOT EXISTS `divisions` (
+CREATE TABLE IF NOT EXISTS `departments` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `department_id` INT NOT NULL,
+  `factory_id` INT NOT NULL,
+  `division_id` INT NOT NULL,
   `name` VARCHAR(100) NOT NULL,
   `description` TEXT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY `uniq_department_division` (`department_id`, `name`),
-  CONSTRAINT `fk_divisions_department` FOREIGN KEY (`department_id`) REFERENCES `departments`(`id`) ON DELETE CASCADE
+  UNIQUE KEY `uniq_division_department` (`division_id`, `name`),
+  CONSTRAINT `fk_departments_factory` FOREIGN KEY (`factory_id`) REFERENCES `factories`(`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_departments_division` FOREIGN KEY (`division_id`) REFERENCES `divisions`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `users` (

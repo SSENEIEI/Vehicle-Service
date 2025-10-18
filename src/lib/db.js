@@ -153,7 +153,7 @@ export async function initDatabase({ seed = true } = {}) {
     `);
 
     await exec(`
-      CREATE TABLE IF NOT EXISTS departments (
+      CREATE TABLE IF NOT EXISTS divisions (
         id INT AUTO_INCREMENT PRIMARY KEY,
         factory_id INT NOT NULL,
         name VARCHAR(150) NOT NULL,
@@ -162,28 +162,28 @@ export async function initDatabase({ seed = true } = {}) {
         is_active TINYINT(1) NOT NULL DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY uniq_department_per_factory (factory_id, name),
-        KEY idx_departments_factory (factory_id),
-        CONSTRAINT fk_departments_factory FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE
+        UNIQUE KEY uniq_division_per_factory (factory_id, name),
+        KEY idx_divisions_factory (factory_id),
+        CONSTRAINT fk_divisions_factory FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
     await exec(`
-      CREATE TABLE IF NOT EXISTS divisions (
+      CREATE TABLE IF NOT EXISTS departments (
         id INT AUTO_INCREMENT PRIMARY KEY,
         factory_id INT NOT NULL,
-        department_id INT NOT NULL,
+        division_id INT NOT NULL,
         name VARCHAR(150) NOT NULL,
         code VARCHAR(30) NULL,
         note TEXT NULL,
         is_active TINYINT(1) NOT NULL DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY uniq_division_per_department (department_id, name),
-        KEY idx_divisions_factory (factory_id),
-        KEY idx_divisions_department (department_id),
-        CONSTRAINT fk_divisions_factory FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE,
-        CONSTRAINT fk_divisions_department FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE
+        UNIQUE KEY uniq_department_per_division (division_id, name),
+        KEY idx_departments_factory (factory_id),
+        KEY idx_departments_division (division_id),
+        CONSTRAINT fk_departments_factory FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE,
+        CONSTRAINT fk_departments_division FOREIGN KEY (division_id) REFERENCES divisions(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
@@ -233,6 +233,20 @@ export async function initDatabase({ seed = true } = {}) {
         CONSTRAINT fk_users_department FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL,
         CONSTRAINT fk_users_division FOREIGN KEY (division_id) REFERENCES divisions(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await exec(`ALTER TABLE divisions DROP FOREIGN KEY fk_divisions_department`);
+    await exec(`ALTER TABLE divisions DROP INDEX uniq_division_per_department`);
+  await exec(`ALTER TABLE divisions DROP COLUMN IF EXISTS department_id`);
+  await exec(`ALTER TABLE divisions ADD UNIQUE INDEX IF NOT EXISTS uniq_division_per_factory (factory_id, name)`);
+
+    await exec(`ALTER TABLE departments ADD COLUMN IF NOT EXISTS division_id INT NULL AFTER factory_id`);
+    await exec(`ALTER TABLE departments DROP INDEX uniq_department_per_factory`);
+  await exec(`ALTER TABLE departments ADD UNIQUE INDEX IF NOT EXISTS uniq_department_per_division (division_id, name)`);
+  await exec(`ALTER TABLE departments ADD INDEX IF NOT EXISTS idx_departments_division (division_id)`);
+    await exec(`
+      ALTER TABLE departments
+      ADD CONSTRAINT fk_departments_division FOREIGN KEY (division_id) REFERENCES divisions(id) ON DELETE CASCADE
     `);
 
   await exec(`ALTER TABLE users DROP COLUMN full_name`);

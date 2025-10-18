@@ -300,7 +300,7 @@ export default function UserManagementClient() {
   const [isDepartmentModalOpen, setIsDepartmentModalOpen] = useState(false);
   const [departmentModalMode, setDepartmentModalMode] = useState("create");
   const [editingDepartmentId, setEditingDepartmentId] = useState(null);
-  const [departmentForm, setDepartmentForm] = useState({ id: null, factoryId: "", name: "" });
+  const [departmentForm, setDepartmentForm] = useState({ id: null, factoryId: "", divisionId: "", name: "" });
   const [departmentFormError, setDepartmentFormError] = useState("");
   const [isSubmittingDepartment, setIsSubmittingDepartment] = useState(false);
   const [deletingDepartmentId, setDeletingDepartmentId] = useState(null);
@@ -308,12 +308,7 @@ export default function UserManagementClient() {
   const [isDivisionModalOpen, setIsDivisionModalOpen] = useState(false);
   const [divisionModalMode, setDivisionModalMode] = useState("create");
   const [editingDivisionId, setEditingDivisionId] = useState(null);
-  const [divisionForm, setDivisionForm] = useState({
-    id: null,
-    factoryId: "",
-    departmentId: "",
-    name: "",
-  });
+  const [divisionForm, setDivisionForm] = useState({ id: null, factoryId: "", name: "" });
   const [divisionFormError, setDivisionFormError] = useState("");
   const [isSubmittingDivision, setIsSubmittingDivision] = useState(false);
   const [deletingDivisionId, setDeletingDivisionId] = useState(null);
@@ -407,6 +402,7 @@ export default function UserManagementClient() {
     setDepartmentForm({
       id: null,
       factoryId: factories.length ? String(factories[0].id) : "",
+      divisionId: "",
       name: "",
     });
     setDepartmentFormError("");
@@ -420,6 +416,7 @@ export default function UserManagementClient() {
     setDepartmentForm({
       id: department.id ?? null,
       factoryId: department.factoryId ? String(department.factoryId) : "",
+      divisionId: department.divisionId ? String(department.divisionId) : "",
       name: department.name || "",
     });
     setDepartmentFormError("");
@@ -430,14 +427,14 @@ export default function UserManagementClient() {
     setIsDepartmentModalOpen(false);
     setDepartmentModalMode("create");
     setEditingDepartmentId(null);
-    setDepartmentForm({ id: null, factoryId: "", name: "" });
+    setDepartmentForm({ id: null, factoryId: "", divisionId: "", name: "" });
     setDepartmentFormError("");
   };
 
   const handleOpenDivisionModal = () => {
     setDivisionModalMode("create");
     setEditingDivisionId(null);
-    setDivisionForm({ id: null, factoryId: "", departmentId: "", name: "" });
+    setDivisionForm({ id: null, factoryId: factories.length ? String(factories[0].id) : "", name: "" });
     setDivisionFormError("");
     setIsDivisionModalOpen(true);
   };
@@ -449,7 +446,6 @@ export default function UserManagementClient() {
     setDivisionForm({
       id: division.id ?? null,
       factoryId: division.factoryId ? String(division.factoryId) : "",
-      departmentId: division.departmentId ? String(division.departmentId) : "",
       name: division.name || "",
     });
     setDivisionFormError("");
@@ -460,7 +456,7 @@ export default function UserManagementClient() {
     setIsDivisionModalOpen(false);
     setDivisionModalMode("create");
     setEditingDivisionId(null);
-    setDivisionForm({ id: null, factoryId: "", departmentId: "", name: "" });
+    setDivisionForm({ id: null, factoryId: "", name: "" });
     setDivisionFormError("");
   };
 
@@ -677,10 +673,29 @@ export default function UserManagementClient() {
   }, [loadUsers, loadFactories, loadDepartments, loadDivisions, loadDrivers, loadVehicles]);
 
   useEffect(() => {
-    if (isDepartmentModalOpen && factories.length && !departmentForm.factoryId) {
-      setDepartmentForm((prev) => ({ ...prev, factoryId: String(factories[0].id) }));
+    if (!isDepartmentModalOpen) {
+      return;
     }
-  }, [isDepartmentModalOpen, factories, departmentForm.factoryId]);
+
+    if (factories.length && !departmentForm.factoryId) {
+      setDepartmentForm((prev) => ({ ...prev, factoryId: String(factories[0].id) }));
+      return;
+    }
+
+    const selectedFactoryId = Number(departmentForm.factoryId);
+    if (!selectedFactoryId) {
+      return;
+    }
+
+    if (!departmentForm.divisionId) {
+      const availableDivisions = divisions.filter(
+        (division) => Number(division.factoryId) === selectedFactoryId
+      );
+      if (availableDivisions.length) {
+        setDepartmentForm((prev) => ({ ...prev, divisionId: String(availableDivisions[0].id) }));
+      }
+    }
+  }, [isDepartmentModalOpen, factories, departmentForm.factoryId, departmentForm.divisionId, divisions]);
 
   const handleInputChange = (field) => (event) => {
     const { value } = event.target;
@@ -692,8 +707,17 @@ export default function UserManagementClient() {
     setUserForm((prev) => ({
       ...prev,
       factory: value,
-      department: "",
       division: "",
+      department: "",
+    }));
+  };
+
+  const handleDivisionSelectChange = (event) => {
+    const { value } = event.target;
+    setUserForm((prev) => ({
+      ...prev,
+      division: value,
+      department: "",
     }));
   };
 
@@ -702,27 +726,26 @@ export default function UserManagementClient() {
     setUserForm((prev) => ({
       ...prev,
       department: value,
-      division: "",
     }));
   };
 
-  const departmentOptions = useMemo(() => {
+  const divisionOptions = useMemo(() => {
     const factoryId = Number(userForm.factory);
     if (!factoryId) return [];
-    return departments.filter((department) => Number(department.factoryId) === factoryId);
-  }, [departments, userForm.factory]);
+    return divisions.filter((division) => Number(division.factoryId) === factoryId);
+  }, [divisions, userForm.factory]);
 
-  const divisionOptions = useMemo(() => {
-    const departmentId = Number(userForm.department);
-    if (!departmentId) return [];
-    return divisions.filter((division) => Number(division.departmentId) === departmentId);
-  }, [divisions, userForm.department]);
+  const departmentOptions = useMemo(() => {
+    const divisionId = Number(userForm.division);
+    if (!divisionId) return [];
+    return departments.filter((department) => Number(department.divisionId) === divisionId);
+  }, [departments, userForm.division]);
 
-  const divisionDepartmentOptions = useMemo(() => {
-    const factoryId = Number(divisionForm.factoryId);
+  const departmentModalDivisionOptions = useMemo(() => {
+    const factoryId = Number(departmentForm.factoryId);
     if (!factoryId) return [];
-    return departments.filter((department) => Number(department.factoryId) === factoryId);
-  }, [departments, divisionForm.factoryId]);
+    return divisions.filter((division) => Number(division.factoryId) === factoryId);
+  }, [divisions, departmentForm.factoryId]);
 
   const handleSubmitUser = async (event) => {
     event.preventDefault();
@@ -748,8 +771,8 @@ export default function UserManagementClient() {
       return;
     }
 
-    if (!factoryId || !departmentId || !divisionId) {
-      setUserFormError("กรุณาเลือกโรงงาน แผนก และฝ่าย");
+    if (!factoryId || !divisionId || !departmentId) {
+      setUserFormError("กรุณาเลือกโรงงาน ฝ่าย และแผนก");
       return;
     }
 
@@ -840,10 +863,16 @@ export default function UserManagementClient() {
     setDepartmentFormError("");
 
     const factoryId = Number(departmentForm.factoryId);
+    const divisionId = Number(departmentForm.divisionId);
     const name = departmentForm.name.trim();
 
     if (!factoryId) {
       setDepartmentFormError("กรุณาเลือกโรงงาน");
+      return;
+    }
+
+    if (!divisionId) {
+      setDepartmentFormError("กรุณาเลือกฝ่าย");
       return;
     }
 
@@ -861,10 +890,11 @@ export default function UserManagementClient() {
         await putJSON("/api/user-management/departments", {
           id: editingDepartmentId,
           factoryId,
+          divisionId,
           name,
         });
       } else {
-        await postJSON("/api/user-management/departments", { factoryId, name });
+        await postJSON("/api/user-management/departments", { factoryId, divisionId, name });
       }
       await loadDepartments();
       await loadDivisions();
@@ -890,16 +920,10 @@ export default function UserManagementClient() {
     setDivisionFormError("");
 
     const factoryId = Number(divisionForm.factoryId);
-    const departmentId = Number(divisionForm.departmentId);
     const name = divisionForm.name.trim();
 
     if (!factoryId) {
       setDivisionFormError("กรุณาเลือกโรงงาน");
-      return;
-    }
-
-    if (!departmentId) {
-      setDivisionFormError("กรุณาเลือกแผนก");
       return;
     }
 
@@ -917,13 +941,13 @@ export default function UserManagementClient() {
         await putJSON("/api/user-management/divisions", {
           id: editingDivisionId,
           factoryId,
-          departmentId,
           name,
         });
       } else {
-        await postJSON("/api/user-management/divisions", { factoryId, departmentId, name });
+        await postJSON("/api/user-management/divisions", { factoryId, name });
       }
       await loadDivisions();
+      await loadDepartments();
       await loadUsers();
       handleCloseDivisionModal();
     } catch (error) {
@@ -942,17 +966,17 @@ export default function UserManagementClient() {
 
   const handleDepartmentFormFactoryChange = (event) => {
     const { value } = event.target;
-    setDepartmentForm((prev) => ({ ...prev, factoryId: value }));
+    setDepartmentForm((prev) => ({ ...prev, factoryId: value, divisionId: "" }));
+  };
+
+  const handleDepartmentFormDivisionChange = (event) => {
+    const { value } = event.target;
+    setDepartmentForm((prev) => ({ ...prev, divisionId: value }));
   };
 
   const handleDivisionFactoryChange = (event) => {
     const { value } = event.target;
-    setDivisionForm((prev) => ({ ...prev, factoryId: value, departmentId: "" }));
-  };
-
-  const handleDivisionDepartmentChange = (event) => {
-    const { value } = event.target;
-    setDivisionForm((prev) => ({ ...prev, departmentId: value }));
+    setDivisionForm((prev) => ({ ...prev, factoryId: value }));
   };
 
   const submitFormData = async (url, method, formData) => {
@@ -1194,8 +1218,8 @@ export default function UserManagementClient() {
     }
   };
 
-  const canAddDepartment = factories.length > 0;
-  const canAddDivision = factories.length > 0 && departments.length > 0;
+  const canAddDivision = factories.length > 0;
+  const canAddDepartment = factories.length > 0 && divisions.length > 0;
 
   return (
     <DashboardShell
@@ -1224,8 +1248,8 @@ export default function UserManagementClient() {
                 <th style={{ ...styles.tableHeadCell, width: "22%" }}>ชื่อผู้ใช้</th>
                 <th style={{ ...styles.tableHeadCell, width: "14%" }}>บทบาท</th>
                 <th style={{ ...styles.tableHeadCell, width: "20%" }}>โรงงาน</th>
-                <th style={{ ...styles.tableHeadCell, width: "20%" }}>แผนก</th>
-                <th style={{ ...styles.tableHeadCell, width: "14%" }}>ฝ่าย</th>
+                <th style={{ ...styles.tableHeadCell, width: "18%" }}>ฝ่าย</th>
+                <th style={{ ...styles.tableHeadCell, width: "16%" }}>แผนก</th>
                 <th style={{ ...styles.tableHeadCell, width: "10%", textAlign: "center" }}>
                   จัดการ
                 </th>
@@ -1259,8 +1283,8 @@ export default function UserManagementClient() {
                       </td>
                       <td style={styles.tableCell}>{ROLE_LABELS[user.role] || user.role || "-"}</td>
                       <td style={styles.tableCell}>{user.factoryName || "-"}</td>
-                      <td style={styles.tableCell}>{user.departmentName || "-"}</td>
                       <td style={styles.tableCell}>{user.divisionName || "-"}</td>
+                      <td style={styles.tableCell}>{user.departmentName || "-"}</td>
                       <td style={{ ...styles.tableCell, textAlign: "center" }}>
                         <div style={{ ...styles.actionGroup, width: "100%", justifyContent: "center" }}>
                           <button
@@ -1374,90 +1398,6 @@ export default function UserManagementClient() {
         <section style={styles.tableCard}>
           <header style={styles.tableTitleBar}>
             <span style={styles.tableTitleInner}>
-              <FaBuildingUser size={22} /> รายชื่อแผนก
-            </span>
-            <button
-              type="button"
-              style={{
-                ...styles.actionButton("ghost"),
-                opacity: canAddDepartment ? 1 : 0.5,
-                pointerEvents: canAddDepartment ? "auto" : "none",
-              }}
-              onClick={canAddDepartment ? handleOpenDepartmentModal : undefined}
-              disabled={!canAddDepartment}
-              title={canAddDepartment ? undefined : "กรุณาเพิ่มโรงงานก่อน"}
-            >
-              <FaBuilding size={16} /> เพิ่มแผนก
-            </button>
-          </header>
-
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={{ ...styles.tableHeadCell, width: "40%" }}>ชื่อแผนก</th>
-                <th style={{ ...styles.tableHeadCell, width: "35%" }}>โรงงาน</th>
-                <th style={{ ...styles.tableHeadCell, width: "25%", textAlign: "center" }}>
-                  จัดการ
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoadingDepartments ? (
-                <tr>
-                  <td colSpan={3} style={styles.tableEmpty}>
-                    กำลังโหลดข้อมูล...
-                  </td>
-                </tr>
-              ) : departments.length === 0 ? (
-                <tr>
-                  <td colSpan={3} style={styles.tableEmpty}>
-                    ยังไม่มีข้อมูลแผนก
-                  </td>
-                </tr>
-              ) : (
-                departments.map((department) => (
-                  <tr key={department.id} style={styles.tableRow}>
-                    <td style={styles.tableCell}>
-                      <span style={styles.userCell}>
-                        <FaBuilding size={22} color="#8fa3c7" />
-                        {department.name}
-                      </span>
-                    </td>
-                    <td style={styles.tableCell}>{department.factoryName || factories.find((f) => f.id === department.factoryId)?.name || "-"}</td>
-                    <td style={{ ...styles.tableCell, textAlign: "center" }}>
-                      <div style={{ ...styles.actionGroup, width: "100%", justifyContent: "center" }}>
-                        <button
-                          type="button"
-                          style={styles.actionButton("primary")}
-                          onClick={() => handleOpenEditDepartmentModal(department)}
-                        >
-                          <FaPenToSquare size={14} /> แก้ไข
-                        </button>
-                        <button
-                          type="button"
-                          style={{
-                            ...styles.actionButton("danger"),
-                            opacity: deletingDepartmentId === department.id ? 0.6 : 1,
-                            cursor: deletingDepartmentId === department.id ? "not-allowed" : "pointer",
-                          }}
-                          onClick={() => handleDeleteDepartment(department)}
-                          disabled={deletingDepartmentId === department.id}
-                        >
-                          <FaTrashCan size={14} />
-                          {deletingDepartmentId === department.id ? " กำลังลบ..." : " ลบ"}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </section>
-
-        <section style={styles.tableCard}>
-          <header style={styles.tableTitleBar}>
-            <span style={styles.tableTitleInner}>
               <FaPeopleGroup size={22} /> รายชื่อฝ่าย
             </span>
             <button
@@ -1469,7 +1409,7 @@ export default function UserManagementClient() {
               }}
               onClick={canAddDivision ? handleOpenDivisionModal : undefined}
               disabled={!canAddDivision}
-              title={canAddDivision ? undefined : "กรุณาเพิ่มโรงงานและแผนกก่อน"}
+              title={canAddDivision ? undefined : "กรุณาเพิ่มโรงงานก่อน"}
             >
               <FaPeopleGroup size={16} /> เพิ่มฝ่าย
             </button>
@@ -1478,9 +1418,8 @@ export default function UserManagementClient() {
           <table style={styles.table}>
             <thead>
               <tr>
-                <th style={{ ...styles.tableHeadCell, width: "30%" }}>ชื่อฝ่าย</th>
-                <th style={{ ...styles.tableHeadCell, width: "30%" }}>แผนก</th>
-                <th style={{ ...styles.tableHeadCell, width: "20%" }}>โรงงาน</th>
+                <th style={{ ...styles.tableHeadCell, width: "45%" }}>ชื่อฝ่าย</th>
+                <th style={{ ...styles.tableHeadCell, width: "35%" }}>โรงงาน</th>
                 <th style={{ ...styles.tableHeadCell, width: "20%", textAlign: "center" }}>
                   จัดการ
                 </th>
@@ -1509,11 +1448,6 @@ export default function UserManagementClient() {
                       </span>
                     </td>
                     <td style={styles.tableCell}>
-                      {division.departmentName ||
-                        departments.find((dept) => dept.id === division.departmentId)?.name ||
-                        "-"}
-                    </td>
-                    <td style={styles.tableCell}>
                       {division.factoryName ||
                         factories.find((factory) => factory.id === division.factoryId)?.name ||
                         "-"}
@@ -1539,6 +1473,100 @@ export default function UserManagementClient() {
                         >
                           <FaTrashCan size={14} />
                           {deletingDivisionId === division.id ? " กำลังลบ..." : " ลบ"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </section>
+
+        <section style={styles.tableCard}>
+          <header style={styles.tableTitleBar}>
+            <span style={styles.tableTitleInner}>
+              <FaBuildingUser size={22} /> รายชื่อแผนก
+            </span>
+            <button
+              type="button"
+              style={{
+                ...styles.actionButton("ghost"),
+                opacity: canAddDepartment ? 1 : 0.5,
+                pointerEvents: canAddDepartment ? "auto" : "none",
+              }}
+              onClick={canAddDepartment ? handleOpenDepartmentModal : undefined}
+              disabled={!canAddDepartment}
+              title={canAddDepartment ? undefined : "กรุณาเพิ่มโรงงานและฝ่ายก่อน"}
+            >
+              <FaBuilding size={16} /> เพิ่มแผนก
+            </button>
+          </header>
+
+          <table style={styles.table}>
+            <thead>
+              <tr>
+                <th style={{ ...styles.tableHeadCell, width: "30%" }}>ชื่อแผนก</th>
+                <th style={{ ...styles.tableHeadCell, width: "30%" }}>ฝ่าย</th>
+                <th style={{ ...styles.tableHeadCell, width: "20%" }}>โรงงาน</th>
+                <th style={{ ...styles.tableHeadCell, width: "20%", textAlign: "center" }}>
+                  จัดการ
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoadingDepartments ? (
+                <tr>
+                  <td colSpan={3} style={styles.tableEmpty}>
+                    กำลังโหลดข้อมูล...
+                  </td>
+                </tr>
+              ) : departments.length === 0 ? (
+                <tr>
+                  <td colSpan={3} style={styles.tableEmpty}>
+                    ยังไม่มีข้อมูลแผนก
+                  </td>
+                </tr>
+              ) : (
+                departments.map((department) => (
+                  <tr key={department.id} style={styles.tableRow}>
+                    <td style={styles.tableCell}>
+                      <span style={styles.userCell}>
+                        <FaBuilding size={22} color="#8fa3c7" />
+                        {department.name}
+                      </span>
+                    </td>
+                    <td style={styles.tableCell}>
+                      {department.divisionName ||
+                        divisions.find((division) => division.id === department.divisionId)?.name ||
+                        "-"}
+                    </td>
+                    <td style={styles.tableCell}>
+                      {department.factoryName ||
+                        factories.find((factory) => factory.id === department.factoryId)?.name ||
+                        "-"}
+                    </td>
+                    <td style={{ ...styles.tableCell, textAlign: "center" }}>
+                      <div style={{ ...styles.actionGroup, width: "100%", justifyContent: "center" }}>
+                        <button
+                          type="button"
+                          style={styles.actionButton("primary")}
+                          onClick={() => handleOpenEditDepartmentModal(department)}
+                        >
+                          <FaPenToSquare size={14} /> แก้ไข
+                        </button>
+                        <button
+                          type="button"
+                          style={{
+                            ...styles.actionButton("danger"),
+                            opacity: deletingDepartmentId === department.id ? 0.6 : 1,
+                            cursor: deletingDepartmentId === department.id ? "not-allowed" : "pointer",
+                          }}
+                          onClick={() => handleDeleteDepartment(department)}
+                          disabled={deletingDepartmentId === department.id}
+                        >
+                          <FaTrashCan size={14} />
+                          {deletingDepartmentId === department.id ? " กำลังลบ..." : " ลบ"}
                         </button>
                       </div>
                     </td>
@@ -1809,6 +1837,32 @@ export default function UserManagementClient() {
                   </div>
 
                   <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel} htmlFor="user-division">
+                      ฝ่าย
+                    </label>
+                    <select
+                      id="user-division"
+                      style={styles.select}
+                      value={userForm.division}
+                      onChange={handleDivisionSelectChange}
+                      required
+                      disabled={!userForm.factory || divisionOptions.length === 0}
+                    >
+                      <option value="" disabled>
+                        {userForm.factory ? "เลือกฝ่าย" : "เลือกโรงงานก่อน"}
+                      </option>
+                      {divisionOptions.map((division) => (
+                        <option key={division.id} value={String(division.id)}>
+                          {division.name}
+                        </option>
+                      ))}
+                    </select>
+                    {userForm.factory && divisionOptions.length === 0 && (
+                      <p style={styles.helperText}>ยังไม่มีฝ่ายในโรงงานนี้</p>
+                    )}
+                  </div>
+
+                  <div style={styles.fieldGroup}>
                     <label style={styles.fieldLabel} htmlFor="user-department">
                       แผนก
                     </label>
@@ -1818,10 +1872,10 @@ export default function UserManagementClient() {
                       value={userForm.department}
                       onChange={handleDepartmentSelectChange}
                       required
-                      disabled={!userForm.factory || departmentOptions.length === 0}
+                      disabled={!userForm.division || departmentOptions.length === 0}
                     >
                       <option value="" disabled>
-                        {userForm.factory ? "เลือกแผนก" : "เลือกโรงงานก่อน"}
+                        {userForm.division ? "เลือกแผนก" : "เลือกฝ่ายก่อน"}
                       </option>
                       {departmentOptions.map((department) => (
                         <option key={department.id} value={String(department.id)}>
@@ -1829,34 +1883,8 @@ export default function UserManagementClient() {
                         </option>
                       ))}
                     </select>
-                    {userForm.factory && departmentOptions.length === 0 && (
-                      <p style={styles.helperText}>ยังไม่มีแผนกในโรงงานนี้</p>
-                    )}
-                  </div>
-
-                  <div style={styles.fieldGroup}>
-                    <label style={styles.fieldLabel} htmlFor="user-division">
-                      ฝ่าย
-                    </label>
-                    <select
-                      id="user-division"
-                      style={styles.select}
-                      value={userForm.division}
-                      onChange={handleInputChange("division")}
-                      required
-                      disabled={!userForm.department || divisionOptions.length === 0}
-                    >
-                      <option value="" disabled>
-                        {userForm.department ? "เลือกฝ่าย" : "เลือกแผนกก่อน"}
-                      </option>
-                      {divisionOptions.map((division) => (
-                        <option key={division.id} value={String(division.id)}>
-                          {division.name}
-                        </option>
-                      ))}
-                    </select>
-                    {userForm.department && divisionOptions.length === 0 && (
-                      <p style={styles.helperText}>ยังไม่มีฝ่ายในแผนกนี้</p>
+                    {userForm.division && departmentOptions.length === 0 && (
+                      <p style={styles.helperText}>ยังไม่มีแผนกในฝ่ายนี้</p>
                     )}
                   </div>
 
@@ -2026,6 +2054,32 @@ export default function UserManagementClient() {
               </div>
 
               <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel} htmlFor="department-division">
+                  ฝ่าย
+                </label>
+                <select
+                  id="department-division"
+                  style={styles.select}
+                  value={departmentForm.divisionId}
+                  onChange={handleDepartmentFormDivisionChange}
+                  disabled={!departmentForm.factoryId || departmentModalDivisionOptions.length === 0}
+                  required
+                >
+                  <option value="" disabled>
+                    เลือกฝ่าย
+                  </option>
+                  {departmentModalDivisionOptions.map((division) => (
+                    <option key={division.id} value={String(division.id)}>
+                      {division.name}
+                    </option>
+                  ))}
+                </select>
+                {departmentForm.factoryId && departmentModalDivisionOptions.length === 0 && (
+                  <span style={styles.helperText}>ยังไม่มีฝ่ายในโรงงานนี้</span>
+                )}
+              </div>
+
+              <div style={styles.fieldGroup}>
                 <label style={styles.fieldLabel} htmlFor="department-name">
                   ชื่อแผนก
                 </label>
@@ -2119,32 +2173,6 @@ export default function UserManagementClient() {
               </div>
 
               <div style={styles.fieldGroup}>
-                <label style={styles.fieldLabel} htmlFor="division-department">
-                  แผนก
-                </label>
-                <select
-                  id="division-department"
-                  style={styles.select}
-                  value={divisionForm.departmentId}
-                  onChange={handleDivisionDepartmentChange}
-                  required
-                  disabled={!divisionForm.factoryId || divisionDepartmentOptions.length === 0}
-                >
-                  <option value="" disabled>
-                    {divisionForm.factoryId ? "เลือกแผนก" : "เลือกโรงงานก่อน"}
-                  </option>
-                  {divisionDepartmentOptions.map((department) => (
-                    <option key={department.id} value={String(department.id)}>
-                      {department.name}
-                    </option>
-                  ))}
-                </select>
-                {divisionForm.factoryId && divisionDepartmentOptions.length === 0 && (
-                  <p style={styles.helperText}>ยังไม่มีแผนกในโรงงานนี้</p>
-                )}
-              </div>
-
-              <div style={styles.fieldGroup}>
                 <label style={styles.fieldLabel} htmlFor="division-name">
                   ชื่อฝ่าย
                 </label>
@@ -2157,7 +2185,7 @@ export default function UserManagementClient() {
                     setDivisionForm((prev) => ({ ...prev, name: event.target.value }))
                   }
                   required
-                  disabled={!divisionForm.departmentId}
+                  disabled={!divisionForm.factoryId}
                 />
               </div>
             </div>

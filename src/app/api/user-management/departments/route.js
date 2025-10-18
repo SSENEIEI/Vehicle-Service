@@ -6,43 +6,53 @@ export async function GET(request) {
     await initDatabase();
     const { searchParams } = new URL(request.url);
     const factoryIdParam = searchParams.get("factoryId");
-    const factoryId = factoryIdParam ? Number(factoryIdParam) : null;
+    const divisionIdParam = searchParams.get("divisionId");
 
-    if (factoryIdParam && (!Number.isInteger(factoryId) || factoryId <= 0)) {
-      return NextResponse.json(
-        { error: "รหัสโรงงานไม่ถูกต้อง" },
-        { status: 400 }
-      );
+    const filters = [];
+    const params = [];
+
+    if (factoryIdParam !== null) {
+      const factoryId = Number(factoryIdParam);
+      if (!Number.isInteger(factoryId) || factoryId <= 0) {
+        return NextResponse.json(
+          { error: "รหัสโรงงานไม่ถูกต้อง" },
+          { status: 400 }
+        );
+      }
+      filters.push("d.factory_id = ?");
+      params.push(factoryId);
     }
 
-    let departments;
-    if (factoryId) {
-      departments = await query(
-        `SELECT d.id,
-                d.name,
-                d.code,
-                d.note,
-                d.is_active AS isActive,
-                d.factory_id AS factoryId
-         FROM departments d
-         WHERE d.factory_id = ?
-         ORDER BY d.name ASC`,
-        [factoryId]
-      );
-    } else {
-      departments = await query(
-        `SELECT d.id,
-                d.name,
-                d.code,
-                d.note,
-                d.is_active AS isActive,
-                d.factory_id AS factoryId,
-                f.name AS factoryName
-         FROM departments d
-         INNER JOIN factories f ON d.factory_id = f.id
-         ORDER BY f.name ASC, d.name ASC`
-      );
+    if (divisionIdParam !== null) {
+      const divisionId = Number(divisionIdParam);
+      if (!Number.isInteger(divisionId) || divisionId <= 0) {
+        return NextResponse.json(
+          { error: "รหัสฝ่ายไม่ถูกต้อง" },
+          { status: 400 }
+        );
+      }
+      filters.push("d.division_id = ?");
+      params.push(divisionId);
     }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+    const departments = await query(
+      `SELECT d.id,
+              d.name,
+              d.code,
+              d.note,
+              d.is_active AS isActive,
+              d.factory_id AS factoryId,
+              d.division_id AS divisionId,
+              f.name AS factoryName,
+              dv.name AS divisionName
+       FROM departments d
+       INNER JOIN divisions dv ON d.division_id = dv.id
+       INNER JOIN factories f ON d.factory_id = f.id
+       ${whereClause}
+       ORDER BY f.name ASC, dv.name ASC, d.name ASC`,
+      params
+    );
 
     return NextResponse.json({ departments });
   } catch (error) {
@@ -60,12 +70,20 @@ export async function POST(request) {
     const body = await request.json();
     const name = String(body?.name || "").trim();
     const factoryId = Number(body?.factoryId);
+    const divisionId = Number(body?.divisionId);
     const code = body?.code ? String(body.code).trim() : null;
     const note = body?.note ? String(body.note).trim() : null;
 
     if (!Number.isInteger(factoryId) || factoryId <= 0) {
       return NextResponse.json(
         { error: "กรุณาเลือกโรงงาน" },
+        { status: 400 }
+      );
+    }
+
+    if (!Number.isInteger(divisionId) || divisionId <= 0) {
+      return NextResponse.json(
+        { error: "กรุณาเลือกฝ่าย" },
         { status: 400 }
       );
     }
@@ -85,21 +103,39 @@ export async function POST(request) {
       );
     }
 
+    const division = await query(
+      "SELECT id, factory_id AS factoryId FROM divisions WHERE id = ?",
+      [divisionId]
+    );
+    if (!division.length) {
+      return NextResponse.json(
+        { error: "ไม่พบฝ่ายที่เลือก" },
+        { status: 404 }
+      );
+    }
+
+    if (division[0].factoryId !== factoryId) {
+      return NextResponse.json(
+        { error: "ฝ่ายไม่อยู่ในโรงงานที่เลือก" },
+        { status: 400 }
+      );
+    }
+
     const duplicate = await query(
-      "SELECT id FROM departments WHERE factory_id = ? AND name = ?",
-      [factoryId, name]
+      "SELECT id FROM departments WHERE division_id = ? AND name = ?",
+      [divisionId, name]
     );
     if (duplicate.length) {
       return NextResponse.json(
-        { error: "มีชื่อแผนกนี้อยู่แล้วในโรงงานที่เลือก" },
+        { error: "มีชื่อแผนกนี้อยู่แล้วในฝ่ายที่เลือก" },
         { status: 409 }
       );
     }
 
     await query(
-      `INSERT INTO departments (factory_id, name, code, note)
-       VALUES (?, ?, ?, ?)`,
-      [factoryId, name, code, note]
+      `INSERT INTO departments (factory_id, division_id, name, code, note)
+       VALUES (?, ?, ?, ?, ?)`,
+      [factoryId, divisionId, name, code, note]
     );
 
     const [department] = await query(
@@ -109,13 +145,16 @@ export async function POST(request) {
               d.note,
               d.is_active AS isActive,
               d.factory_id AS factoryId,
-              f.name AS factoryName
+              f.name AS factoryName,
+              d.division_id AS divisionId,
+              dv.name AS divisionName
        FROM departments d
        INNER JOIN factories f ON d.factory_id = f.id
-       WHERE d.factory_id = ? AND d.name = ?
+       INNER JOIN divisions dv ON d.division_id = dv.id
+       WHERE d.division_id = ? AND d.name = ?
        ORDER BY d.id DESC
        LIMIT 1`,
-      [factoryId, name]
+      [divisionId, name]
     );
 
     return NextResponse.json({ department }, { status: 201 });
@@ -133,7 +172,8 @@ export async function PUT(request) {
     await initDatabase();
     const body = await request.json();
     const id = Number(body?.id);
-    const factoryId = Number(body?.factoryId);
+  const factoryId = Number(body?.factoryId);
+  const divisionId = Number(body?.divisionId);
     const name = String(body?.name || "").trim();
     const codeProvided = body?.code !== undefined;
     const noteProvided = body?.note !== undefined;
@@ -150,6 +190,10 @@ export async function PUT(request) {
       return NextResponse.json({ error: "กรุณาเลือกโรงงาน" }, { status: 400 });
     }
 
+    if (!Number.isInteger(divisionId) || divisionId <= 0) {
+      return NextResponse.json({ error: "กรุณาเลือกฝ่าย" }, { status: 400 });
+    }
+
     if (!name) {
       return NextResponse.json({ error: "กรุณาระบุชื่อแผนก" }, { status: 400 });
     }
@@ -164,19 +208,31 @@ export async function PUT(request) {
       return NextResponse.json({ error: "ไม่พบโรงงานที่เลือก" }, { status: 404 });
     }
 
+    const division = await query(
+      "SELECT id, factory_id AS factoryId FROM divisions WHERE id = ?",
+      [divisionId]
+    );
+    if (!division.length) {
+      return NextResponse.json({ error: "ไม่พบฝ่ายที่เลือก" }, { status: 404 });
+    }
+
+    if (division[0].factoryId !== factoryId) {
+      return NextResponse.json({ error: "ฝ่ายไม่อยู่ในโรงงานที่เลือก" }, { status: 400 });
+    }
+
     const duplicate = await query(
-      "SELECT id FROM departments WHERE factory_id = ? AND name = ? AND id <> ?",
-      [factoryId, name, id]
+      "SELECT id FROM departments WHERE division_id = ? AND name = ? AND id <> ?",
+      [divisionId, name, id]
     );
     if (duplicate.length) {
       return NextResponse.json(
-        { error: "มีชื่อแผนกนี้อยู่แล้วในโรงงานที่เลือก" },
+        { error: "มีชื่อแผนกนี้อยู่แล้วในฝ่ายที่เลือก" },
         { status: 409 }
       );
     }
 
-    const updateFields = ["factory_id = ?", "name = ?"];
-    const params = [factoryId, name];
+    const updateFields = ["factory_id = ?", "division_id = ?", "name = ?"];
+    const params = [factoryId, divisionId, name];
 
     if (codeProvided) {
       updateFields.push("code = ?");
@@ -195,7 +251,6 @@ export async function PUT(request) {
 
     params.push(id);
     await query(`UPDATE departments SET ${updateFields.join(", ")} WHERE id = ?`, params);
-    await query("UPDATE divisions SET factory_id = ? WHERE department_id = ?", [factoryId, id]);
 
     const [updated] = await query(
       `SELECT d.id,
@@ -204,9 +259,12 @@ export async function PUT(request) {
               d.note,
               d.is_active AS isActive,
               d.factory_id AS factoryId,
-              f.name AS factoryName
+    f.name AS factoryName,
+    d.division_id AS divisionId,
+    dv.name AS divisionName
        FROM departments d
        INNER JOIN factories f ON d.factory_id = f.id
+  INNER JOIN divisions dv ON d.division_id = dv.id
        WHERE d.id = ?
        LIMIT 1`,
       [id]
@@ -235,18 +293,6 @@ export async function DELETE(request) {
     const department = await query("SELECT id FROM departments WHERE id = ?", [id]);
     if (!department.length) {
       return NextResponse.json({ error: "ไม่พบแผนก" }, { status: 404 });
-    }
-
-    const [{ total: divisionCount = 0 } = {}] = await query(
-      "SELECT COUNT(*) AS total FROM divisions WHERE department_id = ?",
-      [id]
-    );
-
-    if (Number(divisionCount) > 0) {
-      return NextResponse.json(
-        { error: "ยังมีฝ่ายอยู่ในแผนกนี้ กรุณาลบฝ่ายก่อน" },
-        { status: 409 }
-      );
     }
 
     const [{ total: userCount = 0 } = {}] = await query(

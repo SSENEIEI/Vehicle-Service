@@ -114,27 +114,38 @@ export async function POST(request) {
       );
     }
 
-    const department = await query(
-      "SELECT id FROM departments WHERE id = ? AND factory_id = ?",
-      [departmentId, factoryId]
+    const divisionRows = await query(
+      "SELECT id, factory_id AS factoryId FROM divisions WHERE id = ?",
+      [divisionId]
     );
-    if (!department.length) {
+    if (!divisionRows.length) {
       return NextResponse.json(
-        { error: "แผนกไม่สอดคล้องกับโรงงานที่เลือก" },
+        { error: "ไม่พบฝ่ายที่เลือก" },
+        { status: 404 }
+      );
+    }
+
+    if (divisionRows[0].factoryId !== factoryId) {
+      return NextResponse.json(
+        { error: "ฝ่ายไม่สอดคล้องกับโรงงานที่เลือก" },
         { status: 400 }
       );
     }
 
-    const division = await query(
-      `SELECT dv.id
-         FROM divisions dv
-         INNER JOIN departments dp ON dv.department_id = dp.id
-         WHERE dv.id = ? AND dv.department_id = ? AND dp.factory_id = ?`,
-      [divisionId, departmentId, factoryId]
+    const department = await query(
+      "SELECT id, factory_id AS factoryId, division_id AS divisionId FROM departments WHERE id = ?",
+      [departmentId]
     );
-    if (!division.length) {
+    if (!department.length) {
       return NextResponse.json(
-        { error: "ฝ่ายไม่สอดคล้องกับแผนก/โรงงานที่เลือก" },
+        { error: "ไม่พบแผนกที่เลือก" },
+        { status: 404 }
+      );
+    }
+
+    if (department[0].factoryId !== factoryId || department[0].divisionId !== divisionId) {
+      return NextResponse.json(
+        { error: "แผนกไม่สอดคล้องกับฝ่าย/โรงงานที่เลือก" },
         { status: 400 }
       );
     }
@@ -293,27 +304,38 @@ export async function PUT(request) {
       return NextResponse.json({ error: "ไม่พบโรงงานที่เลือก" }, { status: 404 });
     }
 
-    const department = await query(
-      "SELECT id FROM departments WHERE id = ? AND factory_id = ?",
-      [departmentId, factoryId]
+    const divisionRows = await query(
+      "SELECT id, factory_id AS factoryId FROM divisions WHERE id = ?",
+      [divisionId]
     );
-    if (!department.length) {
+    if (!divisionRows.length) {
       return NextResponse.json(
-        { error: "แผนกไม่สอดคล้องกับโรงงานที่เลือก" },
+        { error: "ไม่พบฝ่ายที่เลือก" },
+        { status: 404 }
+      );
+    }
+
+    if (divisionRows[0].factoryId !== factoryId) {
+      return NextResponse.json(
+        { error: "ฝ่ายไม่สอดคล้องกับโรงงานที่เลือก" },
         { status: 400 }
       );
     }
 
-    const division = await query(
-      `SELECT dv.id
-         FROM divisions dv
-         INNER JOIN departments dp ON dv.department_id = dp.id
-         WHERE dv.id = ? AND dv.department_id = ? AND dp.factory_id = ?`,
-      [divisionId, departmentId, factoryId]
+    const department = await query(
+      "SELECT id, factory_id AS factoryId, division_id AS divisionId FROM departments WHERE id = ?",
+      [departmentId]
     );
-    if (!division.length) {
+    if (!department.length) {
       return NextResponse.json(
-        { error: "ฝ่ายไม่สอดคล้องกับแผนก/โรงงานที่เลือก" },
+        { error: "ไม่พบแผนกที่เลือก" },
+        { status: 404 }
+      );
+    }
+
+    if (department[0].factoryId !== factoryId || department[0].divisionId !== divisionId) {
+      return NextResponse.json(
+        { error: "แผนกไม่สอดคล้องกับฝ่าย/โรงงานที่เลือก" },
         { status: 400 }
       );
     }
