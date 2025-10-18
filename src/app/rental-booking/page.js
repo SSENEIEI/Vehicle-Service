@@ -513,10 +513,10 @@ const styles = {
                       </LabeledField>
                     </div>
                     <div style={styles.pointGridThree}>
-                      <LabeledField label="สถานที่รับ">
+                      <LabeledField label="สถานที่รับ" required>
                         <input style={styles.input} placeholder="" />
                       </LabeledField>
-                      <LabeledField label="อำเภอ">
+                      <LabeledField label="อำเภอ" required>
                         <input style={styles.input} placeholder="" />
                       </LabeledField>
                       <LabeledField label="จังหวัด" required>
@@ -552,9 +552,6 @@ const styles = {
                       </div>
                     </div>
                     <div style={styles.pointGridThree}>
-                      <LabeledField label="ปลายทาง">
-                        <input style={styles.input} placeholder="" />
-                      </LabeledField>
                       <LabeledField label="เวลาถึงปลายทาง" required>
                         <input style={styles.input} type="time" />
                       </LabeledField>
@@ -568,7 +565,7 @@ const styles = {
                       </LabeledField>
                     </div>
                     <div style={styles.pointGridThree}>
-                      <LabeledField label="สถานที่รับ">
+                      <LabeledField label="สถานที่รับ" required>
                         <input style={styles.input} placeholder="" />
                       </LabeledField>
                       <LabeledField label="อำเภอ" required>

@@ -513,10 +513,10 @@ export default function CompanyBookingPage() {
                     </LabeledField>
                   </div>
                   <div style={styles.pointGridThree}>
-                    <LabeledField label="สถานที่รับ">
+                    <LabeledField label="สถานที่รับ" required>
                       <input style={styles.input} placeholder="" />
                     </LabeledField>
-                    <LabeledField label="อำเภอ">
+                    <LabeledField label="อำเภอ" required>
                       <input style={styles.input} placeholder="" />
                     </LabeledField>
                     <LabeledField label="จังหวัด" required>
@@ -552,9 +552,7 @@ export default function CompanyBookingPage() {
                     </div>
                   </div>
                   <div style={styles.pointGridThree}>
-                    <LabeledField label="ปลายทาง">
-                      <input style={styles.input} placeholder="" />
-                    </LabeledField>
+                    
                     <LabeledField label="เวลาถึงปลายทาง" required>
                       <input style={styles.input} type="time" />
                     </LabeledField>
@@ -568,7 +566,7 @@ export default function CompanyBookingPage() {
                     </LabeledField>
                   </div>
                   <div style={styles.pointGridThree}>
-                    <LabeledField label="สถานที่รับ">
+                    <LabeledField label="สถานที่รับ" required>
                       <input style={styles.input} placeholder="" />
                     </LabeledField>
                     <LabeledField label="อำเภอ" required>
