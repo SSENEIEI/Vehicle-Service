@@ -1,16 +1,14 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { DEFAULT_ROLE, ROLE_LABELS, getMenuItemsForRole, normalizeRole } from "@/lib/menuItems";
 import {
-  FaCarSide,
   FaKey,
   FaLocationDot,
-  FaScrewdriverWrench,
-  FaCalendarDay,
   FaClipboardList,
   FaUsers,
   FaChevronRight,
-  FaUserGear,
 } from "react-icons/fa6";
 import { FaArrowLeft } from "react-icons/fa";
 
@@ -355,16 +353,6 @@ const styles = {
   },
 };
 
-  const menuItems = [
-    { label: "จองรถบริษัทฯ", icon: <FaCarSide size={24} />, path: "/company-booking" },
-    { label: "จองรถเช่า", icon: <FaKey size={22} />, path: "/rental-booking" },
-    { label: "ซ่อมรถ", icon: <FaScrewdriverWrench size={22} />, path: "/repair" },
-    { label: "แผนจัดรถประจำวัน", icon: <FaCalendarDay size={22} />, path: "/daily-schedule" },
-    { label: "แผนการใช้รถภาพรวม", icon: <FaClipboardList size={22} />, path: "/overall-plan" },
-    { label: "รถและพนักงานบริษัทฯ", icon: <FaUsers size={22} />, path: "/fleet-staff" },
-    { label: "จัดการผู้ใช้", icon: <FaUserGear size={22} />, path: "/user-management" },
-  ];
-
   function LabeledField({ label, required = false, children }) {
     return (
       <label style={{ display: "flex", flexDirection: "column" }}>
@@ -380,6 +368,37 @@ const styles = {
   export default function RentalBookingPage() {
     const router = useRouter();
     const pathname = usePathname();
+    const [userRole, setUserRole] = useState(DEFAULT_ROLE);
+    const [displayName, setDisplayName] = useState("");
+
+    useEffect(() => {
+      try {
+        const storedRole = localStorage.getItem("userRole");
+        if (storedRole) {
+          setUserRole(normalizeRole(storedRole));
+        }
+        const storedProfile = localStorage.getItem("userProfile");
+        if (storedProfile) {
+          const parsedProfile = JSON.parse(storedProfile);
+          const nameCandidate =
+            parsedProfile?.displayName ||
+            parsedProfile?.fullName ||
+            parsedProfile?.name ||
+            parsedProfile?.username ||
+            "";
+          if (nameCandidate) {
+            setDisplayName(nameCandidate);
+          }
+        }
+      } catch (error) {
+        console.warn("Failed to restore stored session", error);
+      }
+    }, []);
+
+    const normalizedRole = normalizeRole(userRole);
+    const visibleMenuItems = useMemo(() => getMenuItemsForRole(normalizedRole), [normalizedRole]);
+    const roleLabel = ROLE_LABELS[normalizedRole] || normalizedRole;
+    const welcomeText = displayName ? `${displayName} (${roleLabel})` : roleLabel;
 
     return (
       <main style={styles.page}>
@@ -400,21 +419,34 @@ const styles = {
           <div>
             <p style={styles.menuTitle}>เมนู</p>
             <ul style={styles.menuList}>
-              {menuItems.map((item) => {
-                const isActive = item.path ? pathname === item.path : false;
+              {visibleMenuItems.length === 0 ? (
+                <li
+                  style={{
+                    ...styles.menuItem(false),
+                    justifyContent: "center",
+                    opacity: 0.65,
+                    pointerEvents: "none",
+                  }}
+                >
+                  ไม่มีเมนูที่สามารถเข้าถึงได้
+                </li>
+              ) : (
+                visibleMenuItems.map((item) => {
+                  const isActive = item.path ? pathname === item.path : false;
 
-                return (
-                  <li
-                    key={item.label}
-                    style={styles.menuItem(isActive)}
-                    onClick={item.path ? () => router.push(item.path) : undefined}
-                  >
-                    <span style={styles.menuIcon}>{item.icon}</span>
-                    <span style={{ flex: 1 }}>{item.label}</span>
-                    {isActive ? <FaChevronRight size={14} /> : null}
-                  </li>
-                );
-              })}
+                  return (
+                    <li
+                      key={item.label}
+                      style={styles.menuItem(isActive)}
+                      onClick={item.path ? () => router.push(item.path) : undefined}
+                    >
+                      <span style={styles.menuIcon}>{item.icon}</span>
+                      <span style={{ flex: 1 }}>{item.label}</span>
+                      {isActive ? <FaChevronRight size={14} /> : null}
+                    </li>
+                  );
+                })
+              )}
             </ul>
           </div>
         </aside>
@@ -425,7 +457,7 @@ const styles = {
               <FaKey size={26} />
               Vehicle Service <span style={{ fontWeight: "600" }}>จองรถเช่า (สำหรับผู้จอง)</span>
             </div>
-            <p style={styles.welcome}>ยินดีต้อนรับ Admin SAC (AC)</p>
+            <p style={styles.welcome}>ยินดีต้อนรับ {welcomeText}</p>
           </header>
 
           <div style={styles.body}>

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { FaArrowLeft, FaBars, FaTimes } from "react-icons/fa";
 import { FaChevronRight } from "react-icons/fa6";
+import { DEFAULT_ROLE, ROLE_LABELS, getMenuItemsForRole, normalizeRole } from "@/lib/menuItems";
 
 const colors = {
   primary: "#0c4aa1",
@@ -161,6 +162,49 @@ export default function DashboardShell({
   const pathname = usePathname();
   const isOverlaySidebar = sidebarMode === "overlay";
   const [isSidebarOpen, setIsSidebarOpen] = useState(!isOverlaySidebar);
+  const [userRole, setUserRole] = useState(DEFAULT_ROLE);
+  const [displayName, setDisplayName] = useState("");
+
+  useEffect(() => {
+    try {
+      const storedRole = localStorage.getItem("userRole");
+      if (storedRole) {
+        setUserRole(normalizeRole(storedRole));
+      }
+      const storedProfile = localStorage.getItem("userProfile");
+      if (storedProfile) {
+        const parsedProfile = JSON.parse(storedProfile);
+        const nameCandidate =
+          parsedProfile?.displayName ||
+          parsedProfile?.fullName ||
+          parsedProfile?.name ||
+          parsedProfile?.username ||
+          "";
+        if (nameCandidate) {
+          setDisplayName(nameCandidate);
+        }
+      }
+    } catch (error) {
+      console.warn("Failed to restore stored session", error);
+    }
+  }, []);
+
+  const normalizedRole = normalizeRole(userRole);
+
+  const visibleMenuItems = useMemo(() => {
+    if (Array.isArray(menuItems) && menuItems.length) {
+      return menuItems.filter((item) => {
+        if (!item?.roles || item.roles.length === 0) {
+          return true;
+        }
+        return item.roles.includes(normalizedRole);
+      });
+    }
+    return getMenuItemsForRole(normalizedRole);
+  }, [menuItems, normalizedRole]);
+
+  const roleLabel = ROLE_LABELS[normalizedRole] || normalizedRole;
+  const welcomeText = displayName ? `${displayName} (${roleLabel})` : roleLabel;
 
   const containerStyle = {
     ...styles.page,
@@ -214,22 +258,35 @@ export default function DashboardShell({
       <div>
         <p style={styles.menuTitle}>เมนู</p>
         <ul style={styles.menuList}>
-          {menuItems.map((item) => {
-            const isActive = pathname === item.path;
+          {visibleMenuItems.length === 0 ? (
+            <li
+              style={{
+                ...styles.menuItem(false),
+                justifyContent: "center",
+                opacity: 0.65,
+                pointerEvents: "none",
+              }}
+            >
+              ไม่มีเมนูที่สามารถเข้าถึงได้
+            </li>
+          ) : (
+            visibleMenuItems.map((item) => {
+              const isActive = pathname === item.path;
 
-            return (
-              <li key={item.path} style={styles.menuItem(isActive)}>
-                <span style={styles.menuIcon}>{item.icon}</span>
-                <Link
-                  href={item.path}
-                  style={{ flex: 1, color: "inherit", textDecoration: "none" }}
-                >
-                  {item.label}
-                </Link>
-                {isActive ? <FaChevronRight size={14} /> : null}
-              </li>
-            );
-          })}
+              return (
+                <li key={item.path} style={styles.menuItem(isActive)}>
+                  <span style={styles.menuIcon}>{item.icon}</span>
+                  <Link
+                    href={item.path}
+                    style={{ flex: 1, color: "inherit", textDecoration: "none" }}
+                  >
+                    {item.label}
+                  </Link>
+                  {isActive ? <FaChevronRight size={14} /> : null}
+                </li>
+              );
+            })
+          )}
         </ul>
       </div>
     </>
@@ -269,7 +326,7 @@ export default function DashboardShell({
               Vehicle Service <span style={{ fontWeight: "600" }}>{headerSubtitle}</span>
             </div>
           </div>
-          <p style={styles.welcome}>ยินดีต้อนรับ Admin SAC (AC)</p>
+          <p style={styles.welcome}>ยินดีต้อนรับ {welcomeText}</p>
         </header>
 
         <div style={styles.body}>{children}</div>

@@ -150,10 +150,23 @@ export default function Home() {
         return;
       }
 
-  window.alert("เข้าสู่ระบบสำเร็จ");
-  setFeedback({ type: "success", text: "ลงชื่อเข้าใช้สำเร็จ" });
-  setFormData({ username: "", password: "" });
-  window.location.href = "/company-booking";
+      try {
+        if (payload?.token) {
+          localStorage.setItem("token", payload.token);
+        }
+        if (payload?.user) {
+          localStorage.setItem("userProfile", JSON.stringify(payload.user));
+          const roleValue = payload.user.role || "admin";
+          localStorage.setItem("userRole", roleValue);
+        }
+      } catch (storageError) {
+        console.error("Persisting login session failed", storageError);
+      }
+
+      window.alert("เข้าสู่ระบบสำเร็จ");
+      setFeedback({ type: "success", text: "ลงชื่อเข้าใช้สำเร็จ" });
+      setFormData({ username: "", password: "" });
+      window.location.href = "/company-booking";
     } catch (error) {
       console.error("Login request failed", error);
       setFeedback({ type: "error", text: "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง" });
