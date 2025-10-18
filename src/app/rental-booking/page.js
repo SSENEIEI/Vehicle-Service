@@ -444,11 +444,11 @@ const styles = {
                   <LabeledField label="ชื่อผู้จอง" required>
                     <input style={styles.input} />
                   </LabeledField>
-                  <LabeledField label="ฝ่าย" required>
+                  <LabeledField label="โรงงาน" required>
                     <select style={styles.input}>
-                      <option>เลือกฝ่าย</option>
-                      <option>GA</option>
-                      <option>SAC</option>
+                      <option>เลือกโรงงาน</option>
+                      <option>โรงงาน 1</option>
+                      <option>โรงงาน 2</option>
                     </select>
                   </LabeledField>
                   <LabeledField label="แผนก" required>
@@ -456,6 +456,13 @@ const styles = {
                       <option>เลือกแผนก</option>
                       <option>GA Service</option>
                       <option>Operation</option>
+                    </select>
+                  </LabeledField>
+                  <LabeledField label="ฝ่าย" required>
+                    <select style={styles.input}>
+                      <option>เลือกฝ่าย</option>
+                      <option>GA</option>
+                      <option>SAC</option>
                     </select>
                   </LabeledField>
                   <LabeledField label="เบอร์ติดต่อกลับ" required>

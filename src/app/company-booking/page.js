@@ -444,11 +444,11 @@ export default function CompanyBookingPage() {
                 <LabeledField label="ชื่อผู้จอง" required>
                   <input style={styles.input}  />
                 </LabeledField>
-                <LabeledField label="ฝ่าย" required>
+                <LabeledField label="โรงงาน" required>
                   <select style={styles.input}>
-                    <option>เลือกฝ่าย</option>
-                    <option>GA</option>
-                    <option>SAC</option>
+                    <option>เลือกโรงงาน</option>
+                    <option>โรงงาน 1</option>
+                    <option>โรงงาน 2</option>
                   </select>
                 </LabeledField>
                 <LabeledField label="แผนก" required>
@@ -456,6 +456,13 @@ export default function CompanyBookingPage() {
                     <option>เลือกแผนก</option>
                     <option>GA Service</option>
                     <option>Operation</option>
+                  </select>
+                </LabeledField>
+                <LabeledField label="ฝ่าย" required>
+                  <select style={styles.input}>
+                    <option>เลือกฝ่าย</option>
+                    <option>GA</option>
+                    <option>SAC</option>
                   </select>
                 </LabeledField>
                 <LabeledField label="เบอร์ติดต่อกลับ" required>
@@ -592,7 +599,7 @@ export default function CompanyBookingPage() {
               <div style={styles.sectionHeader}>
                 <FaClipboardList size={20} /> ระบุกรณีมีของบรรทุกบนรถ
               </div>
-              <LabeledField label="ยืนยันพนักงานขับรถ" required>
+              <LabeledField label="ระบุรายละเอียด" required>
                 <textarea style={styles.textarea} placeholder="ระบุรายละเอียด เช่น ประเภทของสิ่งของ ขนาดหรือน้ำหนัก จุดโหลด/สิ่งที่ควรระวัง"></textarea>
               </LabeledField>
               <div style={styles.fileUpload}>
