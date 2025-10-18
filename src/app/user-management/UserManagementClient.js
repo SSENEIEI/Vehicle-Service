@@ -253,6 +253,7 @@ const styles = {
 const createInitialUserForm = () => ({
   username: "",
   password: "",
+  email: "",
   factory: "",
   department: "",
   division: "",
@@ -352,6 +353,7 @@ export default function UserManagementClient() {
     setUserForm({
       username: user.username || "",
       password: "",
+      email: user.email || "",
       factory: user.factoryId ? String(user.factoryId) : "",
       department: user.departmentId ? String(user.departmentId) : "",
       division: user.divisionId ? String(user.divisionId) : "",
@@ -699,7 +701,16 @@ export default function UserManagementClient() {
 
   const handleInputChange = (field) => (event) => {
     const { value } = event.target;
-    setUserForm((prev) => ({ ...prev, [field]: value }));
+    setUserForm((prev) => {
+      if (field === "role") {
+        return {
+          ...prev,
+          [field]: value,
+          email: value === "admin" ? prev.email : "",
+        };
+      }
+      return { ...prev, [field]: value };
+    });
   };
 
   const handleFactorySelectChange = (event) => {
@@ -747,16 +758,19 @@ export default function UserManagementClient() {
     return divisions.filter((division) => Number(division.factoryId) === factoryId);
   }, [divisions, departmentForm.factoryId]);
 
+  const shouldShowEmailField = userForm.role === "admin";
+
   const handleSubmitUser = async (event) => {
     event.preventDefault();
     if (isSubmittingUser) return;
     setUserFormError("");
 
     const isEditing = userModalMode === "edit";
-  const editingSuperAdmin = isEditing && isEditingSuperAdmin;
+    const editingSuperAdmin = isEditing && isEditingSuperAdmin;
     const username = userForm.username.trim();
     const password = userForm.password.trim();
     const role = userForm.role;
+    const email = userForm.email.trim();
     const factoryId = userForm.factory ? Number(userForm.factory) : null;
     const departmentId = userForm.department ? Number(userForm.department) : null;
     const divisionId = userForm.division ? Number(userForm.division) : null;
@@ -771,9 +785,11 @@ export default function UserManagementClient() {
       return;
     }
 
-    if (!factoryId || !divisionId || !departmentId) {
-      setUserFormError("กรุณาเลือกโรงงาน ฝ่าย และแผนก");
-      return;
+    if (!editingSuperAdmin) {
+      if (!factoryId || !divisionId || !departmentId) {
+        setUserFormError("กรุณาเลือกโรงงาน ฝ่าย และแผนก");
+        return;
+      }
     }
 
     if (!isEditing && !password) {
@@ -784,10 +800,17 @@ export default function UserManagementClient() {
     const payload = {
       username,
       role,
-      factoryId,
-      departmentId,
-      divisionId,
     };
+
+    if (!editingSuperAdmin) {
+      payload.factoryId = factoryId;
+      payload.departmentId = departmentId;
+      payload.divisionId = divisionId;
+    }
+
+    if (role === "admin") {
+      payload.email = email || null;
+    }
 
     if (!isEditing || password) {
       payload.password = password;
@@ -1807,6 +1830,22 @@ export default function UserManagementClient() {
                   <p style={styles.helperText}>หากไม่ต้องการเปลี่ยนรหัสผ่าน ให้เว้นว่างไว้</p>
                 )}
               </div>
+
+              {shouldShowEmailField && (
+                <div style={styles.fieldGroup}>
+                  <label style={styles.fieldLabel} htmlFor="user-email">
+                    E-mail
+                  </label>
+                  <input
+                    id="user-email"
+                    type="email"
+                    style={styles.input}
+                    value={userForm.email}
+                    onChange={handleInputChange("email")}
+                    placeholder="example@company.com"
+                  />
+                </div>
+              )}
 
               {!isEditingSuperAdmin && (
                 <>
