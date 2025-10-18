@@ -374,6 +374,7 @@ export default function CompanyBookingPage() {
     department: "",
     factory: "",
   });
+  const [dropOffCount, setDropOffCount] = useState(1);
 
   useEffect(() => {
     try {
@@ -426,6 +427,10 @@ export default function CompanyBookingPage() {
     }
     welcomeText = composed;
   }
+
+  const handleAddDropOffPoint = () => {
+    setDropOffCount((count) => count + 1);
+  };
 
   return (
     <main style={styles.page}>
@@ -594,61 +599,68 @@ export default function CompanyBookingPage() {
                       <input style={styles.input} placeholder="" />
                     </LabeledField>
                   </div>
-                  <button type="button" style={styles.fileButton}>
+                  <button type="button" style={styles.fileButton} onClick={handleAddDropOffPoint}>
                     + เพิ่มจุดรับ - ส่งถัดไป
                   </button>
                 </div>
 
-                <div style={styles.pointCard}>
-                  <div style={styles.pointHeaderBlock}>
-                    <div style={styles.pointHeaderRow}>
-                      <h4 style={styles.pointTitle}>ปลายทาง</h4>
-                      <span style={styles.pointNote}>ข้อมูลจุดรับผู้โดยสาร</span>
+                {Array.from({ length: dropOffCount }, (_, index) => {
+                  const title = index === 0 ? "ปลายทาง" : `ปลายทางที่ ${index + 1}`;
+                  const showBottomNote = index === dropOffCount - 1;
+                  return (
+                    <div key={`dropoff-${index}`} style={styles.pointCard}>
+                      <div style={styles.pointHeaderBlock}>
+                        <div style={styles.pointHeaderRow}>
+                          <h4 style={styles.pointTitle}>{title}</h4>
+                          <span style={styles.pointNote}>ข้อมูลจุดรับผู้โดยสาร</span>
+                        </div>
+                        <div style={styles.pointTabs}>
+                          <span style={styles.pointTab(true)}>ปลายทาง</span>
+                          <span style={styles.pointTabLabel}>ข้อมูลจุดรับผู้โดยสาร</span>
+                        </div>
+                      </div>
+                      <div style={styles.pointGridThree}>
+                        <LabeledField label="เวลาถึงปลายทาง" required>
+                          <input style={styles.input} type="time" />
+                        </LabeledField>
+                        <LabeledField label="จำนวนผู้โดยสารขึ้นจุดนี้" required>
+                          <input style={styles.input} type="number" min="1" defaultValue="1" />
+                        </LabeledField>
+                      </div>
+                      <div style={styles.pointGridOne}>
+                        <LabeledField label="รายชื่อคนขึ้นจุดนี้">
+                          <input style={styles.input} placeholder="" />
+                        </LabeledField>
+                      </div>
+                      <div style={styles.pointGridThree}>
+                        <LabeledField label="สถานที่รับ" required>
+                          <input style={styles.input} placeholder="" />
+                        </LabeledField>
+                        <LabeledField label="อำเภอ" required>
+                          <input style={styles.input} placeholder="" />
+                        </LabeledField>
+                        <LabeledField label="จังหวัด" required>
+                          <input style={styles.input} placeholder="" />
+                        </LabeledField>
+                      </div>
+                      <p style={styles.subSectionLabel}>เดินทางโดยเครื่องบิน (จุดปลายทาง)</p>
+                      <div style={styles.pointGridThree}>
+                        <LabeledField label="เที่ยวบิน">
+                          <input style={styles.input} placeholder="เช่น TG123" />
+                        </LabeledField>
+                        <LabeledField label="เวลาแลนดิ้ง">
+                          <input style={styles.input} type="time" />
+                        </LabeledField>
+                        <LabeledField label="หมายเหตุถึงคนขับ+ปลายทาง">
+                          <input style={styles.input} placeholder="" />
+                        </LabeledField>
+                      </div>
+                      {showBottomNote ? (
+                        <p style={styles.bottomNote}>สามารถเพิ่มได้หลายจุดตามลำดับการเดินทาง</p>
+                      ) : null}
                     </div>
-                    <div style={styles.pointTabs}>
-                      <span style={styles.pointTab(true)}>ปลายทาง</span>
-                      <span style={styles.pointTabLabel}>ข้อมูลจุดรับผู้โดยสาร</span>
-                    </div>
-                  </div>
-                  <div style={styles.pointGridThree}>
-                    
-                    <LabeledField label="เวลาถึงปลายทาง" required>
-                      <input style={styles.input} type="time" />
-                    </LabeledField>
-                    <LabeledField label="จำนวนผู้โดยสารขึ้นจุดนี้" required>
-                      <input style={styles.input} type="number" min="1" defaultValue="1" />
-                    </LabeledField>
-                  </div>
-                  <div style={styles.pointGridOne}>
-                    <LabeledField label="รายชื่อคนขึ้นจุดนี้">
-                      <input style={styles.input} placeholder="" />
-                    </LabeledField>
-                  </div>
-                  <div style={styles.pointGridThree}>
-                    <LabeledField label="สถานที่รับ" required>
-                      <input style={styles.input} placeholder="" />
-                    </LabeledField>
-                    <LabeledField label="อำเภอ" required>
-                      <input style={styles.input} placeholder="" />
-                    </LabeledField>
-                    <LabeledField label="จังหวัด" required>
-                      <input style={styles.input} placeholder="" />
-                    </LabeledField>
-                  </div>
-                  <p style={styles.subSectionLabel}>เดินทางโดยเครื่องบิน (จุดปลายทาง)</p>
-                  <div style={styles.pointGridThree}>
-                    <LabeledField label="เที่ยวบิน">
-                      <input style={styles.input} placeholder="เช่น TG123" />
-                    </LabeledField>
-                    <LabeledField label="เวลาแลนดิ้ง">
-                      <input style={styles.input} type="time" />
-                    </LabeledField>
-                    <LabeledField label="หมายเหตุถึงคนขับ+ปลายทาง">
-                      <input style={styles.input} placeholder="" />
-                    </LabeledField>
-                  </div>
-                  <p style={styles.bottomNote}>สามารถเพิ่มได้หลายจุดตามลำดับการเดินทาง</p>
-                </div>
+                  );
+                })}
               </div>
             </section>
 
