@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import DashboardShell from "@/components/DashboardShell";
 import { menuItems } from "@/lib/menuItems";
-import { fetchJSON, postJSON } from "@/lib/http";
+import { deleteJSON, fetchJSON, postJSON, putJSON } from "@/lib/http";
 import {
   FaUserGear,
   FaUserLarge,
@@ -269,6 +269,7 @@ export default function UserManagementClient() {
 
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
   const [userFormError, setUserFormError] = useState("");
+  const [deletingUserId, setDeletingUserId] = useState(null);
 
   const [isFactoryModalOpen, setIsFactoryModalOpen] = useState(false);
   const [factoryModalMode, setFactoryModalMode] = useState("create");
@@ -276,6 +277,7 @@ export default function UserManagementClient() {
   const [factoryForm, setFactoryForm] = useState({ id: null, name: "" });
   const [factoryFormError, setFactoryFormError] = useState("");
   const [isSubmittingFactory, setIsSubmittingFactory] = useState(false);
+  const [deletingFactoryId, setDeletingFactoryId] = useState(null);
 
   const [isDepartmentModalOpen, setIsDepartmentModalOpen] = useState(false);
   const [departmentModalMode, setDepartmentModalMode] = useState("create");
@@ -283,6 +285,7 @@ export default function UserManagementClient() {
   const [departmentForm, setDepartmentForm] = useState({ id: null, factoryId: "", name: "" });
   const [departmentFormError, setDepartmentFormError] = useState("");
   const [isSubmittingDepartment, setIsSubmittingDepartment] = useState(false);
+  const [deletingDepartmentId, setDeletingDepartmentId] = useState(null);
 
   const [isDivisionModalOpen, setIsDivisionModalOpen] = useState(false);
   const [divisionModalMode, setDivisionModalMode] = useState("create");
@@ -295,6 +298,7 @@ export default function UserManagementClient() {
   });
   const [divisionFormError, setDivisionFormError] = useState("");
   const [isSubmittingDivision, setIsSubmittingDivision] = useState(false);
+  const [deletingDivisionId, setDeletingDivisionId] = useState(null);
 
   const resetUserForm = () => {
     setUserForm(createInitialUserForm());
@@ -562,12 +566,15 @@ export default function UserManagementClient() {
 
     const payload = {
       username,
-      password,
       role,
       factoryId,
       departmentId,
       divisionId,
     };
+
+    if (!isEditing || password) {
+      payload.password = password;
+    }
 
     setIsSubmittingUser(true);
     try {
@@ -575,37 +582,17 @@ export default function UserManagementClient() {
         if (!editingUserId) {
           throw new Error("ไม่พบรหัสผู้ใช้");
         }
-
-        const selectedFactory = factories.find((factory) => factory.id === factoryId);
-        const selectedDepartment = departments.find((department) => department.id === departmentId);
-        const selectedDivision = divisions.find((division) => division.id === divisionId);
-
-        setUsers((prev) =>
-          prev.map((existing) =>
-            existing.id === editingUserId
-              ? {
-                  ...existing,
-                  username,
-                  role,
-                  factoryId,
-                  factoryName: selectedFactory?.name || existing.factoryName,
-                  departmentId,
-                  departmentName: selectedDepartment?.name || existing.departmentName,
-                  divisionId,
-                  divisionName: selectedDivision?.name || existing.divisionName,
-                }
-              : existing
-          )
-        );
-
-        handleCloseUserModal();
+        await putJSON("/api/user-management/users", {
+          id: editingUserId,
+          ...payload,
+        });
       } else {
         await postJSON("/api/user-management/users", payload);
-        await loadUsers();
-        handleCloseUserModal();
       }
+      await loadUsers();
+      handleCloseUserModal();
     } catch (error) {
-      console.error(isEditing ? "แก้ไขผู้ใช้ไม่สำเร็จ (frontend)" : "เพิ่มผู้ใช้ไม่สำเร็จ", error);
+      console.error(isEditing ? "แก้ไขผู้ใช้ไม่สำเร็จ" : "เพิ่มผู้ใช้ไม่สำเร็จ", error);
       setUserFormError(
         error?.message || (isEditing ? "ไม่สามารถแก้ไขผู้ใช้ได้" : "ไม่สามารถเพิ่มผู้ใช้ได้")
       );
@@ -619,7 +606,6 @@ export default function UserManagementClient() {
     if (isSubmittingFactory) return;
     setFactoryFormError("");
 
-    const isEditing = factoryModalMode === "edit";
     const name = factoryForm.name.trim();
     if (!name) {
       setFactoryFormError("กรุณาระบุชื่อโรงงาน");
@@ -628,34 +614,26 @@ export default function UserManagementClient() {
 
     setIsSubmittingFactory(true);
     try {
-      if (isEditing) {
+      if (factoryModalMode === "edit") {
         if (!editingFactoryId) {
           throw new Error("ไม่พบรหัสโรงงาน");
         }
-
-        setFactories((prev) =>
-          prev.map((factory) =>
-            factory.id === editingFactoryId
-              ? { ...factory, name }
-              : factory
-          )
-        );
-        setUsers((prev) =>
-          prev.map((user) =>
-            user.factoryId === editingFactoryId ? { ...user, factoryName: name } : user
-          )
-        );
-
-        handleCloseFactoryModal();
+        await putJSON("/api/user-management/factories", { id: editingFactoryId, name });
       } else {
         await postJSON("/api/user-management/factories", { name });
-        await loadFactories();
-        handleCloseFactoryModal();
       }
+      await loadFactories();
+      await loadDepartments();
+      await loadDivisions();
+      await loadUsers();
+      handleCloseFactoryModal();
     } catch (error) {
-      console.error(isEditing ? "แก้ไขโรงงานไม่สำเร็จ (frontend)" : "เพิ่มโรงงานไม่สำเร็จ", error);
+      console.error(
+        factoryModalMode === "edit" ? "แก้ไขโรงงานไม่สำเร็จ" : "เพิ่มโรงงานไม่สำเร็จ",
+        error
+      );
       setFactoryFormError(
-        error?.message || (isEditing ? "ไม่สามารถแก้ไขโรงงานได้" : "ไม่สามารถเพิ่มโรงงานได้")
+        error?.message || (factoryModalMode === "edit" ? "ไม่สามารถแก้ไขโรงงานได้" : "ไม่สามารถเพิ่มโรงงานได้")
       );
     } finally {
       setIsSubmittingFactory(false);
@@ -667,7 +645,6 @@ export default function UserManagementClient() {
     if (isSubmittingDepartment) return;
     setDepartmentFormError("");
 
-    const isEditing = departmentModalMode === "edit";
     const factoryId = Number(departmentForm.factoryId);
     const name = departmentForm.name.trim();
 
@@ -683,60 +660,30 @@ export default function UserManagementClient() {
 
     setIsSubmittingDepartment(true);
     try {
-      if (isEditing) {
+      if (departmentModalMode === "edit") {
         if (!editingDepartmentId) {
           throw new Error("ไม่พบรหัสแผนก");
         }
-
-        const selectedFactory = factories.find((factory) => factory.id === factoryId);
-
-        setDepartments((prev) =>
-          prev.map((department) =>
-            department.id === editingDepartmentId
-              ? {
-                  ...department,
-                  name,
-                  factoryId,
-                  factoryName: selectedFactory?.name || department.factoryName,
-                }
-              : department
-          )
-        );
-
-        setUsers((prev) =>
-          prev.map((user) =>
-            user.departmentId === editingDepartmentId
-              ? {
-                  ...user,
-                  departmentName: name,
-                }
-              : user
-          )
-        );
-
-        setDivisions((prev) =>
-          prev.map((division) =>
-            division.departmentId === editingDepartmentId
-              ? {
-                  ...division,
-                  departmentName: name,
-                  factoryId,
-                  factoryName: selectedFactory?.name || division.factoryName,
-                }
-              : division
-          )
-        );
-
-        handleCloseDepartmentModal();
+        await putJSON("/api/user-management/departments", {
+          id: editingDepartmentId,
+          factoryId,
+          name,
+        });
       } else {
         await postJSON("/api/user-management/departments", { factoryId, name });
-        await loadDepartments();
-        handleCloseDepartmentModal();
       }
+      await loadDepartments();
+      await loadDivisions();
+      await loadUsers();
+      handleCloseDepartmentModal();
     } catch (error) {
-      console.error(isEditing ? "แก้ไขแผนกไม่สำเร็จ (frontend)" : "เพิ่มแผนกไม่สำเร็จ", error);
+      console.error(
+        departmentModalMode === "edit" ? "แก้ไขแผนกไม่สำเร็จ" : "เพิ่มแผนกไม่สำเร็จ",
+        error
+      );
       setDepartmentFormError(
-        error?.message || (isEditing ? "ไม่สามารถแก้ไขแผนกได้" : "ไม่สามารถเพิ่มแผนกได้")
+        error?.message ||
+          (departmentModalMode === "edit" ? "ไม่สามารถแก้ไขแผนกได้" : "ไม่สามารถเพิ่มแผนกได้")
       );
     } finally {
       setIsSubmittingDepartment(false);
@@ -748,7 +695,6 @@ export default function UserManagementClient() {
     if (isSubmittingDivision) return;
     setDivisionFormError("");
 
-    const isEditing = divisionModalMode === "edit";
     const factoryId = Number(divisionForm.factoryId);
     const departmentId = Number(divisionForm.departmentId);
     const name = divisionForm.name.trim();
@@ -770,50 +716,30 @@ export default function UserManagementClient() {
 
     setIsSubmittingDivision(true);
     try {
-      if (isEditing) {
+      if (divisionModalMode === "edit") {
         if (!editingDivisionId) {
           throw new Error("ไม่พบรหัสฝ่าย");
         }
-
-        const selectedFactory = factories.find((factory) => factory.id === factoryId);
-        const selectedDepartment = departments.find((department) => department.id === departmentId);
-
-        setDivisions((prev) =>
-          prev.map((division) =>
-            division.id === editingDivisionId
-              ? {
-                  ...division,
-                  name,
-                  factoryId,
-                  factoryName: selectedFactory?.name || division.factoryName,
-                  departmentId,
-                  departmentName: selectedDepartment?.name || division.departmentName,
-                }
-              : division
-          )
-        );
-
-        setUsers((prev) =>
-          prev.map((user) =>
-            user.divisionId === editingDivisionId
-              ? {
-                  ...user,
-                  divisionName: name,
-                }
-              : user
-          )
-        );
-
-        handleCloseDivisionModal();
+        await putJSON("/api/user-management/divisions", {
+          id: editingDivisionId,
+          factoryId,
+          departmentId,
+          name,
+        });
       } else {
         await postJSON("/api/user-management/divisions", { factoryId, departmentId, name });
-        await loadDivisions();
-        handleCloseDivisionModal();
       }
+      await loadDivisions();
+      await loadUsers();
+      handleCloseDivisionModal();
     } catch (error) {
-      console.error(isEditing ? "แก้ไขฝ่ายไม่สำเร็จ (frontend)" : "เพิ่มฝ่ายไม่สำเร็จ", error);
+      console.error(
+        divisionModalMode === "edit" ? "แก้ไขฝ่ายไม่สำเร็จ" : "เพิ่มฝ่ายไม่สำเร็จ",
+        error
+      );
       setDivisionFormError(
-        error?.message || (isEditing ? "ไม่สามารถแก้ไขฝ่ายได้" : "ไม่สามารถเพิ่มฝ่ายได้")
+        error?.message ||
+          (divisionModalMode === "edit" ? "ไม่สามารถแก้ไขฝ่ายได้" : "ไม่สามารถเพิ่มฝ่ายได้")
       );
     } finally {
       setIsSubmittingDivision(false);
@@ -833,6 +759,80 @@ export default function UserManagementClient() {
   const handleDivisionDepartmentChange = (event) => {
     const { value } = event.target;
     setDivisionForm((prev) => ({ ...prev, departmentId: value }));
+  };
+
+  const handleDeleteUser = async (user) => {
+    if (!user?.id || deletingUserId === user.id) return;
+    const confirmed = window.confirm(`ยืนยันการลบผู้ใช้ ${user.username || ""}?`);
+    if (!confirmed) return;
+
+    setDeletingUserId(user.id);
+    try {
+      await deleteJSON("/api/user-management/users", { id: user.id });
+      await loadUsers();
+    } catch (error) {
+      console.error("ลบผู้ใช้ไม่สำเร็จ", error);
+      window.alert(error?.message || "ไม่สามารถลบผู้ใช้ได้");
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
+  const handleDeleteFactory = async (factory) => {
+    if (!factory?.id || deletingFactoryId === factory.id) return;
+    const confirmed = window.confirm(`ยืนยันการลบโรงงาน ${factory.name || ""}?`);
+    if (!confirmed) return;
+
+    setDeletingFactoryId(factory.id);
+    try {
+      await deleteJSON("/api/user-management/factories", { id: factory.id });
+      await loadFactories();
+      await loadDepartments();
+      await loadDivisions();
+      await loadUsers();
+    } catch (error) {
+      console.error("ลบโรงงานไม่สำเร็จ", error);
+      window.alert(error?.message || "ไม่สามารถลบโรงงานได้");
+    } finally {
+      setDeletingFactoryId(null);
+    }
+  };
+
+  const handleDeleteDepartment = async (department) => {
+    if (!department?.id || deletingDepartmentId === department.id) return;
+    const confirmed = window.confirm(`ยืนยันการลบแผนก ${department.name || ""}?`);
+    if (!confirmed) return;
+
+    setDeletingDepartmentId(department.id);
+    try {
+      await deleteJSON("/api/user-management/departments", { id: department.id });
+      await loadDepartments();
+      await loadDivisions();
+      await loadUsers();
+    } catch (error) {
+      console.error("ลบแผนกไม่สำเร็จ", error);
+      window.alert(error?.message || "ไม่สามารถลบแผนกได้");
+    } finally {
+      setDeletingDepartmentId(null);
+    }
+  };
+
+  const handleDeleteDivision = async (division) => {
+    if (!division?.id || deletingDivisionId === division.id) return;
+    const confirmed = window.confirm(`ยืนยันการลบฝ่าย ${division.name || ""}?`);
+    if (!confirmed) return;
+
+    setDeletingDivisionId(division.id);
+    try {
+      await deleteJSON("/api/user-management/divisions", { id: division.id });
+      await loadDivisions();
+      await loadUsers();
+    } catch (error) {
+      console.error("ลบฝ่ายไม่สำเร็จ", error);
+      window.alert(error?.message || "ไม่สามารถลบฝ่ายได้");
+    } finally {
+      setDeletingDivisionId(null);
+    }
   };
 
   const canAddDepartment = factories.length > 0;
@@ -915,8 +915,18 @@ export default function UserManagementClient() {
                           >
                             <FaPenToSquare size={14} /> แก้ไข
                           </button>
-                          <button type="button" style={styles.actionButton("danger")}>
-                            <FaTrashCan size={14} /> ลบ
+                          <button
+                            type="button"
+                            style={{
+                              ...styles.actionButton("danger"),
+                              opacity: deletingUserId === user.id ? 0.6 : 1,
+                              cursor: deletingUserId === user.id ? "not-allowed" : "pointer",
+                            }}
+                            onClick={() => handleDeleteUser(user)}
+                            disabled={deletingUserId === user.id}
+                          >
+                            <FaTrashCan size={14} />
+                            {deletingUserId === user.id ? " กำลังลบ..." : " ลบ"}
                           </button>
                         </div>
                       </td>
@@ -982,8 +992,18 @@ export default function UserManagementClient() {
                         >
                           <FaPenToSquare size={14} /> แก้ไข
                         </button>
-                        <button type="button" style={styles.actionButton("danger")}>
-                          <FaTrashCan size={14} /> ลบ
+                        <button
+                          type="button"
+                          style={{
+                            ...styles.actionButton("danger"),
+                            opacity: deletingFactoryId === factory.id ? 0.6 : 1,
+                            cursor: deletingFactoryId === factory.id ? "not-allowed" : "pointer",
+                          }}
+                          onClick={() => handleDeleteFactory(factory)}
+                          disabled={deletingFactoryId === factory.id}
+                        >
+                          <FaTrashCan size={14} />
+                          {deletingFactoryId === factory.id ? " กำลังลบ..." : " ลบ"}
                         </button>
                       </div>
                     </td>
@@ -1056,8 +1076,18 @@ export default function UserManagementClient() {
                         >
                           <FaPenToSquare size={14} /> แก้ไข
                         </button>
-                        <button type="button" style={styles.actionButton("danger")}>
-                          <FaTrashCan size={14} /> ลบ
+                        <button
+                          type="button"
+                          style={{
+                            ...styles.actionButton("danger"),
+                            opacity: deletingDepartmentId === department.id ? 0.6 : 1,
+                            cursor: deletingDepartmentId === department.id ? "not-allowed" : "pointer",
+                          }}
+                          onClick={() => handleDeleteDepartment(department)}
+                          disabled={deletingDepartmentId === department.id}
+                        >
+                          <FaTrashCan size={14} />
+                          {deletingDepartmentId === department.id ? " กำลังลบ..." : " ลบ"}
                         </button>
                       </div>
                     </td>
@@ -1140,8 +1170,18 @@ export default function UserManagementClient() {
                         >
                           <FaPenToSquare size={14} /> แก้ไข
                         </button>
-                        <button type="button" style={styles.actionButton("danger")}>
-                          <FaTrashCan size={14} /> ลบ
+                        <button
+                          type="button"
+                          style={{
+                            ...styles.actionButton("danger"),
+                            opacity: deletingDivisionId === division.id ? 0.6 : 1,
+                            cursor: deletingDivisionId === division.id ? "not-allowed" : "pointer",
+                          }}
+                          onClick={() => handleDeleteDivision(division)}
+                          disabled={deletingDivisionId === division.id}
+                        >
+                          <FaTrashCan size={14} />
+                          {deletingDivisionId === division.id ? " กำลังลบ..." : " ลบ"}
                         </button>
                       </div>
                     </td>
