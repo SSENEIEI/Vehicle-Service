@@ -19,6 +19,36 @@ ON DUPLICATE KEY UPDATE
   `description` = VALUES(`description`),
   `capabilities` = VALUES(`capabilities`);
 
+CREATE TABLE IF NOT EXISTS `factories` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `name` VARCHAR(100) NOT NULL UNIQUE,
+  `location` VARCHAR(255) NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `departments` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `factory_id` INT NOT NULL,
+  `name` VARCHAR(100) NOT NULL,
+  `description` TEXT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `uniq_factory_department` (`factory_id`, `name`),
+  CONSTRAINT `fk_departments_factory` FOREIGN KEY (`factory_id`) REFERENCES `factories`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `divisions` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `department_id` INT NOT NULL,
+  `name` VARCHAR(100) NOT NULL,
+  `description` TEXT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `uniq_department_division` (`department_id`, `name`),
+  CONSTRAINT `fk_divisions_department` FOREIGN KEY (`department_id`) REFERENCES `departments`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS `users` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `username` VARCHAR(50) NOT NULL UNIQUE,
@@ -27,10 +57,19 @@ CREATE TABLE IF NOT EXISTS `users` (
   `email` VARCHAR(100) NULL,
   `role` VARCHAR(30) NOT NULL,
   `status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
+  `factory_id` INT NULL,
+  `department_id` INT NULL,
+  `division_id` INT NULL,
   `last_login_at` DATETIME NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT `fk_users_role` FOREIGN KEY (`role`) REFERENCES `roles`(`role_key`)
+  KEY `idx_users_factory` (`factory_id`),
+  KEY `idx_users_department` (`department_id`),
+  KEY `idx_users_division` (`division_id`),
+  CONSTRAINT `fk_users_role` FOREIGN KEY (`role`) REFERENCES `roles`(`role_key`),
+  CONSTRAINT `fk_users_factory` FOREIGN KEY (`factory_id`) REFERENCES `factories`(`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_users_department` FOREIGN KEY (`department_id`) REFERENCES `departments`(`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_users_division` FOREIGN KEY (`division_id`) REFERENCES `divisions`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 INSERT INTO `users` (`username`, `password_hash`, `full_name`, `email`, `role`, `status`)
