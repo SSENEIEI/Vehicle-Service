@@ -3,6 +3,24 @@ import bcrypt from "bcryptjs";
 import { initDatabase, query } from "@/lib/db";
 
 const ALLOWED_ROLES = new Set(["admin", "user", "vendor"]);
+const ROOT_ADMIN_USERNAME = "gaservice";
+
+const isRootAdminRecord = (user) => {
+  if (!user) return false;
+  const username = String(user.username || "").trim().toLowerCase();
+  if (username === ROOT_ADMIN_USERNAME) {
+    return true;
+  }
+  if (
+    user.role === "admin" &&
+    !user.factoryId &&
+    !user.departmentId &&
+    !user.divisionId
+  ) {
+    return true;
+  }
+  return false;
+};
 
 export async function GET() {
   try {
@@ -167,22 +185,87 @@ export async function PUT(request) {
     await initDatabase();
     const body = await request.json();
     const id = Number(body?.id);
-    const username = String(body?.username || "").trim();
-    const role = ALLOWED_ROLES.has(body?.role) ? body.role : null;
-    const passwordRaw = body?.password ? String(body.password).trim() : "";
-    const emailProvided = body?.email !== undefined;
-    const email = emailProvided ? String(body.email || "").trim() : undefined;
-    const factoryId = Number(body?.factoryId);
-    const departmentId = Number(body?.departmentId);
-    const divisionId = Number(body?.divisionId);
-
     if (!Number.isInteger(id) || id <= 0) {
       return NextResponse.json({ error: "รหัสผู้ใช้ไม่ถูกต้อง" }, { status: 400 });
     }
 
+    const username = String(body?.username || "").trim();
+    const passwordRaw = body?.password ? String(body.password).trim() : "";
+    const emailProvided = body?.email !== undefined;
+    const email = emailProvided ? String(body.email || "").trim() : undefined;
+
     if (!username) {
       return NextResponse.json({ error: "กรุณาระบุชื่อผู้ใช้" }, { status: 400 });
     }
+
+    const [existingUser] = await query(
+      `SELECT id, username, role, factory_id AS factoryId, department_id AS departmentId, division_id AS divisionId
+       FROM users
+       WHERE id = ?
+       LIMIT 1`,
+      [id]
+    );
+
+    if (!existingUser) {
+      return NextResponse.json({ error: "ไม่พบผู้ใช้" }, { status: 404 });
+    }
+
+    const isRootAdmin = isRootAdminRecord(existingUser);
+
+    if (isRootAdmin) {
+      const duplicate = await query("SELECT id FROM users WHERE username = ? AND id <> ?", [username, id]);
+      if (duplicate.length) {
+        return NextResponse.json({ error: "ชื่อผู้ใช้นี้มีอยู่แล้ว" }, { status: 409 });
+      }
+
+      const updateFields = ["username = ?"];
+      const params = [username];
+
+      if (emailProvided) {
+        updateFields.push("email = ?");
+        params.push(email || null);
+      }
+
+      if (passwordRaw) {
+        const passwordHash = await bcrypt.hash(passwordRaw, 10);
+        updateFields.push("password_hash = ?");
+        params.push(passwordHash);
+      }
+
+      params.push(id);
+      await query(`UPDATE users SET ${updateFields.join(", ")} WHERE id = ?`, params);
+
+      const [updatedUser] = await query(
+        `SELECT
+           u.id,
+           u.username,
+           u.email,
+           u.role,
+           u.status,
+           u.created_at AS createdAt,
+           u.updated_at AS updatedAt,
+           u.factory_id AS factoryId,
+           f.name AS factoryName,
+           u.department_id AS departmentId,
+           d.name AS departmentName,
+           u.division_id AS divisionId,
+           dv.name AS divisionName
+         FROM users u
+         LEFT JOIN factories f ON u.factory_id = f.id
+         LEFT JOIN departments d ON u.department_id = d.id
+         LEFT JOIN divisions dv ON u.division_id = dv.id
+         WHERE u.id = ?
+         LIMIT 1`,
+        [id]
+      );
+
+      return NextResponse.json({ user: updatedUser });
+    }
+
+    const role = ALLOWED_ROLES.has(body?.role) ? body.role : null;
+    const factoryId = Number(body?.factoryId);
+    const departmentId = Number(body?.departmentId);
+    const divisionId = Number(body?.divisionId);
 
     if (!role) {
       return NextResponse.json({ error: "บทบาทผู้ใช้ไม่ถูกต้อง" }, { status: 400 });
@@ -198,11 +281,6 @@ export async function PUT(request) {
 
     if (!Number.isInteger(divisionId) || divisionId <= 0) {
       return NextResponse.json({ error: "กรุณาเลือกฝ่าย" }, { status: 400 });
-    }
-
-    const user = await query("SELECT id FROM users WHERE id = ?", [id]);
-    if (!user.length) {
-      return NextResponse.json({ error: "ไม่พบผู้ใช้" }, { status: 404 });
     }
 
     const duplicate = await query("SELECT id FROM users WHERE username = ? AND id <> ?", [username, id]);
@@ -299,6 +377,25 @@ export async function DELETE(request) {
 
     if (!Number.isInteger(id) || id <= 0) {
       return NextResponse.json({ error: "รหัสผู้ใช้ไม่ถูกต้อง" }, { status: 400 });
+    }
+
+    const [user] = await query(
+      `SELECT username, role, factory_id AS factoryId, department_id AS departmentId, division_id AS divisionId
+         FROM users
+         WHERE id = ?
+         LIMIT 1`,
+      [id]
+    );
+
+    if (!user) {
+      return NextResponse.json({ error: "ไม่พบผู้ใช้" }, { status: 404 });
+    }
+
+    if (isRootAdminRecord(user)) {
+      return NextResponse.json(
+        { error: "ไม่สามารถลบผู้ดูแลระบบหลักได้" },
+        { status: 403 }
+      );
     }
 
     const result = await query("DELETE FROM users WHERE id = ?", [id]);

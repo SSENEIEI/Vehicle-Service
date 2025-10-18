@@ -20,6 +20,25 @@ import {
   FaIndustry,
 } from "react-icons/fa6";
 
+const SUPER_ADMIN_USERNAME = "gaservice";
+
+const isSuperAdminUser = (user) => {
+  if (!user) return false;
+  const username = String(user.username || "").trim().toLowerCase();
+  if (username === SUPER_ADMIN_USERNAME) {
+    return true;
+  }
+  if (
+    user.role === "admin" &&
+    !user.factoryId &&
+    !user.departmentId &&
+    !user.divisionId
+  ) {
+    return true;
+  }
+  return false;
+};
+
 const styles = {
   container: {
     display: "flex",
@@ -268,6 +287,7 @@ export default function UserManagementClient() {
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
   const [userFormError, setUserFormError] = useState("");
   const [deletingUserId, setDeletingUserId] = useState(null);
+  const [isEditingSuperAdmin, setIsEditingSuperAdmin] = useState(false);
 
   const [isFactoryModalOpen, setIsFactoryModalOpen] = useState(false);
   const [factoryModalMode, setFactoryModalMode] = useState("create");
@@ -325,11 +345,13 @@ export default function UserManagementClient() {
     setEditingUserId(null);
     setUserForm(createInitialUserForm());
     setUserFormError("");
+    setIsEditingSuperAdmin(false);
     setIsUserModalOpen(true);
   };
 
   const handleOpenEditUserModal = (user) => {
     if (!user) return;
+    const superAdmin = isSuperAdminUser(user);
     setUserModalMode("edit");
     setEditingUserId(user.id ?? null);
     setUserForm({
@@ -341,6 +363,7 @@ export default function UserManagementClient() {
       role: user.role || "",
     });
     setUserFormError("");
+    setIsEditingSuperAdmin(superAdmin);
     setIsUserModalOpen(true);
   };
 
@@ -349,6 +372,7 @@ export default function UserManagementClient() {
     setUserModalMode("create");
     setEditingUserId(null);
     setUserFormError("");
+    setIsEditingSuperAdmin(false);
     resetUserForm();
   };
 
@@ -706,6 +730,7 @@ export default function UserManagementClient() {
     setUserFormError("");
 
     const isEditing = userModalMode === "edit";
+  const editingSuperAdmin = isEditing && isEditingSuperAdmin;
     const username = userForm.username.trim();
     const password = userForm.password.trim();
     const role = userForm.role;
@@ -1220,16 +1245,18 @@ export default function UserManagementClient() {
                   </td>
                 </tr>
               ) : (
-                users.map((user) => (
-                  <tr key={user.id} style={styles.tableRow}>
-                    <td style={styles.tableCell}>
-                      <span style={styles.userCell}>
-                        <FaUserLarge size={24} color="#8fa3c7" />
-                        <span style={styles.userMeta}>
-                          <span>{user.username}</span>
+                users.map((user) => {
+                  const isSuperAdmin = isSuperAdminUser(user);
+                  return (
+                    <tr key={user.id} style={styles.tableRow}>
+                      <td style={styles.tableCell}>
+                        <span style={styles.userCell}>
+                          <FaUserLarge size={24} color="#8fa3c7" />
+                          <span style={styles.userMeta}>
+                            <span>{user.username}</span>
+                          </span>
                         </span>
-                      </span>
-                    </td>
+                      </td>
                       <td style={styles.tableCell}>{ROLE_LABELS[user.role] || user.role || "-"}</td>
                       <td style={styles.tableCell}>{user.factoryName || "-"}</td>
                       <td style={styles.tableCell}>{user.departmentName || "-"}</td>
@@ -1243,23 +1270,26 @@ export default function UserManagementClient() {
                           >
                             <FaPenToSquare size={14} /> แก้ไข
                           </button>
-                          <button
-                            type="button"
-                            style={{
-                              ...styles.actionButton("danger"),
-                              opacity: deletingUserId === user.id ? 0.6 : 1,
-                              cursor: deletingUserId === user.id ? "not-allowed" : "pointer",
-                            }}
-                            onClick={() => handleDeleteUser(user)}
-                            disabled={deletingUserId === user.id}
-                          >
-                            <FaTrashCan size={14} />
-                            {deletingUserId === user.id ? " กำลังลบ..." : " ลบ"}
-                          </button>
+                          {!isSuperAdmin && (
+                            <button
+                              type="button"
+                              style={{
+                                ...styles.actionButton("danger"),
+                                opacity: deletingUserId === user.id ? 0.6 : 1,
+                                cursor: deletingUserId === user.id ? "not-allowed" : "pointer",
+                              }}
+                              onClick={() => handleDeleteUser(user)}
+                              disabled={deletingUserId === user.id}
+                            >
+                              <FaTrashCan size={14} />
+                              {deletingUserId === user.id ? " กำลังลบ..." : " ลบ"}
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -1750,102 +1780,106 @@ export default function UserManagementClient() {
                 )}
               </div>
 
-              <div style={styles.fieldGroup}>
-                <label style={styles.fieldLabel} htmlFor="user-factory">
-                  โรงงาน
-                </label>
-                <select
-                  id="user-factory"
-                  style={styles.select}
-                  value={userForm.factory}
-                  onChange={handleFactorySelectChange}
-                  required
-                  disabled={factories.length === 0}
-                >
-                  <option value="" disabled>
-                    เลือกโรงงาน
-                  </option>
-                  {factories.map((factory) => (
-                    <option key={factory.id} value={String(factory.id)}>
-                      {factory.name}
-                    </option>
-                  ))}
-                </select>
-                {factories.length === 0 && (
-                  <p style={styles.helperText}>ยังไม่มีโรงงาน กรุณาเพิ่มโรงงานก่อน</p>
-                )}
-              </div>
+              {!isEditingSuperAdmin && (
+                <>
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel} htmlFor="user-factory">
+                      โรงงาน
+                    </label>
+                    <select
+                      id="user-factory"
+                      style={styles.select}
+                      value={userForm.factory}
+                      onChange={handleFactorySelectChange}
+                      required
+                      disabled={factories.length === 0}
+                    >
+                      <option value="" disabled>
+                        เลือกโรงงาน
+                      </option>
+                      {factories.map((factory) => (
+                        <option key={factory.id} value={String(factory.id)}>
+                          {factory.name}
+                        </option>
+                      ))}
+                    </select>
+                    {factories.length === 0 && (
+                      <p style={styles.helperText}>ยังไม่มีโรงงาน กรุณาเพิ่มโรงงานก่อน</p>
+                    )}
+                  </div>
 
-              <div style={styles.fieldGroup}>
-                <label style={styles.fieldLabel} htmlFor="user-department">
-                  แผนก
-                </label>
-                <select
-                  id="user-department"
-                  style={styles.select}
-                  value={userForm.department}
-                  onChange={handleDepartmentSelectChange}
-                  required
-                  disabled={!userForm.factory || departmentOptions.length === 0}
-                >
-                  <option value="" disabled>
-                    {userForm.factory ? "เลือกแผนก" : "เลือกโรงงานก่อน"}
-                  </option>
-                  {departmentOptions.map((department) => (
-                    <option key={department.id} value={String(department.id)}>
-                      {department.name}
-                    </option>
-                  ))}
-                </select>
-                {userForm.factory && departmentOptions.length === 0 && (
-                  <p style={styles.helperText}>ยังไม่มีแผนกในโรงงานนี้</p>
-                )}
-              </div>
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel} htmlFor="user-department">
+                      แผนก
+                    </label>
+                    <select
+                      id="user-department"
+                      style={styles.select}
+                      value={userForm.department}
+                      onChange={handleDepartmentSelectChange}
+                      required
+                      disabled={!userForm.factory || departmentOptions.length === 0}
+                    >
+                      <option value="" disabled>
+                        {userForm.factory ? "เลือกแผนก" : "เลือกโรงงานก่อน"}
+                      </option>
+                      {departmentOptions.map((department) => (
+                        <option key={department.id} value={String(department.id)}>
+                          {department.name}
+                        </option>
+                      ))}
+                    </select>
+                    {userForm.factory && departmentOptions.length === 0 && (
+                      <p style={styles.helperText}>ยังไม่มีแผนกในโรงงานนี้</p>
+                    )}
+                  </div>
 
-              <div style={styles.fieldGroup}>
-                <label style={styles.fieldLabel} htmlFor="user-division">
-                  ฝ่าย
-                </label>
-                <select
-                  id="user-division"
-                  style={styles.select}
-                  value={userForm.division}
-                  onChange={handleInputChange("division")}
-                  required
-                  disabled={!userForm.department || divisionOptions.length === 0}
-                >
-                  <option value="" disabled>
-                    {userForm.department ? "เลือกฝ่าย" : "เลือกแผนกก่อน"}
-                  </option>
-                  {divisionOptions.map((division) => (
-                    <option key={division.id} value={String(division.id)}>
-                      {division.name}
-                    </option>
-                  ))}
-                </select>
-                {userForm.department && divisionOptions.length === 0 && (
-                  <p style={styles.helperText}>ยังไม่มีฝ่ายในแผนกนี้</p>
-                )}
-              </div>
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel} htmlFor="user-division">
+                      ฝ่าย
+                    </label>
+                    <select
+                      id="user-division"
+                      style={styles.select}
+                      value={userForm.division}
+                      onChange={handleInputChange("division")}
+                      required
+                      disabled={!userForm.department || divisionOptions.length === 0}
+                    >
+                      <option value="" disabled>
+                        {userForm.department ? "เลือกฝ่าย" : "เลือกแผนกก่อน"}
+                      </option>
+                      {divisionOptions.map((division) => (
+                        <option key={division.id} value={String(division.id)}>
+                          {division.name}
+                        </option>
+                      ))}
+                    </select>
+                    {userForm.department && divisionOptions.length === 0 && (
+                      <p style={styles.helperText}>ยังไม่มีฝ่ายในแผนกนี้</p>
+                    )}
+                  </div>
 
-              <div style={styles.fieldGroup}>
-                <label style={styles.fieldLabel} htmlFor="user-role">
-                  บทบาทผู้ใช้
-                </label>
-                <select
-                  id="user-role"
-                  style={styles.select}
-                  value={userForm.role}
-                  onChange={handleInputChange("role")}
-                  required
-                >
-                  <option value="" disabled>
-                    เลือกบทบาท
-                  </option>
-                  <option value="user">ผู้ใช้ทั่วไป</option>
-                  <option value="vendor">ผู้ให้บริการ (Vendor)</option>
-                </select>
-              </div>
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel} htmlFor="user-role">
+                      บทบาทผู้ใช้
+                    </label>
+                    <select
+                      id="user-role"
+                      style={styles.select}
+                      value={userForm.role}
+                      onChange={handleInputChange("role")}
+                      required
+                    >
+                      <option value="" disabled>
+                        เลือกบทบาท
+                      </option>
+                      <option value="user">ผู้ใช้ทั่วไป</option>
+                      <option value="vendor">ผู้ให้บริการ (Vendor)</option>
+                    </select>
+                  </div>
+                </>
+              )}
             </div>
 
             {userFormError && <p style={{ ...styles.errorText, padding: "0 26px" }}>{userFormError}</p>}
