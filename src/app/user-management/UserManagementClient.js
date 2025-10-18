@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import DashboardShell from "@/components/DashboardShell";
 import { menuItems } from "@/lib/menuItems";
 import { deleteJSON, fetchJSON, postJSON, putJSON } from "@/lib/http";
@@ -221,21 +222,14 @@ const styles = {
     padding: "18px 26px",
     borderTop: "1px solid #dfe6f4",
   },
+  imagePreview: {
+    width: "100%",
+    maxHeight: "240px",
+    borderRadius: "16px",
+    border: "1px solid #d4deef",
+    objectFit: "cover",
+  },
 };
-
-const drivers = [
-  { id: 301, name: "นายคงกร สุขสันต์", phone: "089-009-09676" },
-  { id: 302, name: "นายสมหมาย มีชัย", phone: "081-345-6789" },
-  { id: 303, name: "นางสาวศิริพร วัฒนกิจ", phone: "086-222-3344" },
-  { id: 304, name: "นายสมปอง ใจดี", phone: "080-555-6677" },
-];
-
-const vehicles = [
-  { id: 401, name: "Toyota Commuter", registration: "ฮม-4521", type: "รถตู้" },
-  { id: 402, name: "Isuzu D-Max", registration: "ขข-7812", type: "รถกระบะ" },
-  { id: 403, name: "Honda Accord", registration: "1กข-9988", type: "รถเก๋ง" },
-  { id: 404, name: "Mitsubishi Fuso", registration: "89-5476", type: "รถบรรทุก" },
-];
 
 const createInitialUserForm = () => ({
   username: "",
@@ -261,11 +255,15 @@ export default function UserManagementClient() {
   const [factories, setFactories] = useState([]);
   const [departments, setDepartments] = useState([]);
   const [divisions, setDivisions] = useState([]);
+  const [drivers, setDrivers] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
 
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [isLoadingFactories, setIsLoadingFactories] = useState(true);
   const [isLoadingDepartments, setIsLoadingDepartments] = useState(true);
   const [isLoadingDivisions, setIsLoadingDivisions] = useState(true);
+  const [isLoadingDrivers, setIsLoadingDrivers] = useState(true);
+  const [isLoadingVehicles, setIsLoadingVehicles] = useState(true);
 
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
   const [userFormError, setUserFormError] = useState("");
@@ -299,6 +297,24 @@ export default function UserManagementClient() {
   const [divisionFormError, setDivisionFormError] = useState("");
   const [isSubmittingDivision, setIsSubmittingDivision] = useState(false);
   const [deletingDivisionId, setDeletingDivisionId] = useState(null);
+
+  const [isDriverModalOpen, setIsDriverModalOpen] = useState(false);
+  const [driverModalMode, setDriverModalMode] = useState("create");
+  const [editingDriverId, setEditingDriverId] = useState(null);
+  const [driverForm, setDriverForm] = useState({ name: "", phone: "", imageFile: null, imagePreview: "", existingImageUrl: "" });
+  const [driverFormError, setDriverFormError] = useState("");
+  const [isSubmittingDriver, setIsSubmittingDriver] = useState(false);
+  const [deletingDriverId, setDeletingDriverId] = useState(null);
+
+  const [isVehicleModalOpen, setIsVehicleModalOpen] = useState(false);
+  const [vehicleModalMode, setVehicleModalMode] = useState("create");
+  const [editingVehicleId, setEditingVehicleId] = useState(null);
+  const [vehicleForm, setVehicleForm] = useState({ name: "", registration: "", vehicleType: "", imageFile: null, imagePreview: "", existingImageUrl: "" });
+  const [vehicleFormError, setVehicleFormError] = useState("");
+  const [isSubmittingVehicle, setIsSubmittingVehicle] = useState(false);
+  const [deletingVehicleId, setDeletingVehicleId] = useState(null);
+
+  const [imagePreviewModal, setImagePreviewModal] = useState({ isOpen: false, title: "", url: "" });
 
   const resetUserForm = () => {
     setUserForm(createInitialUserForm());
@@ -424,6 +440,131 @@ export default function UserManagementClient() {
     setDivisionFormError("");
   };
 
+  const resetDriverForm = () => {
+    setDriverForm((prev) => {
+      if (prev.imagePreview && prev.imagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(prev.imagePreview);
+      }
+      return { name: "", phone: "", imageFile: null, imagePreview: "", existingImageUrl: "" };
+    });
+  };
+
+  const handleOpenDriverModal = () => {
+    setDriverModalMode("create");
+    setEditingDriverId(null);
+    resetDriverForm();
+    setDriverFormError("");
+    setIsDriverModalOpen(true);
+  };
+
+  const handleOpenEditDriverModal = (driver) => {
+    if (!driver) return;
+    setDriverModalMode("edit");
+    setEditingDriverId(driver.id ?? null);
+    setDriverForm({
+      name: driver.name || "",
+      phone: driver.phone || "",
+      imageFile: null,
+      imagePreview: driver.photoUrl || "",
+      existingImageUrl: driver.photoUrl || "",
+    });
+    setDriverFormError("");
+    setIsDriverModalOpen(true);
+  };
+
+  const handleCloseDriverModal = () => {
+    setIsDriverModalOpen(false);
+    setDriverModalMode("create");
+    setEditingDriverId(null);
+    resetDriverForm();
+    setDriverFormError("");
+  };
+
+  const resetVehicleForm = () => {
+    setVehicleForm((prev) => {
+      if (prev.imagePreview && prev.imagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(prev.imagePreview);
+      }
+      return {
+        name: "",
+        registration: "",
+        vehicleType: "",
+        imageFile: null,
+        imagePreview: "",
+        existingImageUrl: "",
+      };
+    });
+  };
+
+  const handleOpenVehicleModal = () => {
+    setVehicleModalMode("create");
+    setEditingVehicleId(null);
+    resetVehicleForm();
+    setVehicleFormError("");
+    setIsVehicleModalOpen(true);
+  };
+
+  const handleOpenEditVehicleModal = (vehicle) => {
+    if (!vehicle) return;
+    setVehicleModalMode("edit");
+    setEditingVehicleId(vehicle.id ?? null);
+    setVehicleForm({
+      name: vehicle.name || "",
+      registration: vehicle.registration || "",
+      vehicleType: vehicle.vehicleType || "",
+      imageFile: null,
+      imagePreview: vehicle.photoUrl || "",
+      existingImageUrl: vehicle.photoUrl || "",
+    });
+    setVehicleFormError("");
+    setIsVehicleModalOpen(true);
+  };
+
+  const handleCloseVehicleModal = () => {
+    setIsVehicleModalOpen(false);
+    setVehicleModalMode("create");
+    setEditingVehicleId(null);
+    resetVehicleForm();
+    setVehicleFormError("");
+  };
+
+  const handleDriverImageChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    setDriverForm((prev) => {
+      if (prev.imagePreview && prev.imagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(prev.imagePreview);
+      }
+      return {
+        ...prev,
+        imageFile: file,
+        imagePreview: file ? URL.createObjectURL(file) : prev.existingImageUrl || "",
+      };
+    });
+  };
+
+  const handleVehicleImageChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    setVehicleForm((prev) => {
+      if (prev.imagePreview && prev.imagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(prev.imagePreview);
+      }
+      return {
+        ...prev,
+        imageFile: file,
+        imagePreview: file ? URL.createObjectURL(file) : prev.existingImageUrl || "",
+      };
+    });
+  };
+
+  const openImagePreview = (title, url) => {
+    if (!url) return;
+    setImagePreviewModal({ isOpen: true, title, url });
+  };
+
+  const closeImagePreview = () => {
+    setImagePreviewModal({ isOpen: false, title: "", url: "" });
+  };
+
   const loadUsers = useCallback(async () => {
     setIsLoadingUsers(true);
     try {
@@ -476,12 +617,40 @@ export default function UserManagementClient() {
     }
   }, []);
 
+  const loadDrivers = useCallback(async () => {
+    setIsLoadingDrivers(true);
+    try {
+      const data = await fetchJSON("/api/company-assets/drivers");
+      setDrivers(Array.isArray(data?.drivers) ? data.drivers : []);
+    } catch (error) {
+      console.error("โหลดพนักงานขับรถไม่สำเร็จ", error);
+      setDrivers([]);
+    } finally {
+      setIsLoadingDrivers(false);
+    }
+  }, []);
+
+  const loadVehicles = useCallback(async () => {
+    setIsLoadingVehicles(true);
+    try {
+      const data = await fetchJSON("/api/company-assets/vehicles");
+      setVehicles(Array.isArray(data?.vehicles) ? data.vehicles : []);
+    } catch (error) {
+      console.error("โหลดรถบริษัทไม่สำเร็จ", error);
+      setVehicles([]);
+    } finally {
+      setIsLoadingVehicles(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadUsers();
     loadFactories();
     loadDepartments();
     loadDivisions();
-  }, [loadUsers, loadFactories, loadDepartments, loadDivisions]);
+    loadDrivers();
+    loadVehicles();
+  }, [loadUsers, loadFactories, loadDepartments, loadDivisions, loadDrivers, loadVehicles]);
 
   useEffect(() => {
     if (isDepartmentModalOpen && factories.length && !departmentForm.factoryId) {
@@ -759,6 +928,171 @@ export default function UserManagementClient() {
   const handleDivisionDepartmentChange = (event) => {
     const { value } = event.target;
     setDivisionForm((prev) => ({ ...prev, departmentId: value }));
+  };
+
+  const submitFormData = async (url, method, formData) => {
+    const response = await fetch(url, { method, body: formData });
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch (parseError) {
+      payload = null;
+    }
+    if (!response.ok) {
+      const error = new Error(payload?.error || `HTTP ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
+    return payload;
+  };
+
+  const handleSubmitDriver = async (event) => {
+    event.preventDefault();
+    if (isSubmittingDriver) return;
+    setDriverFormError("");
+
+    const name = driverForm.name.trim();
+    const phone = driverForm.phone.trim();
+    const isEdit = driverModalMode === "edit";
+
+    if (!name) {
+      setDriverFormError("กรุณาระบุชื่อพนักงานขับรถ");
+      return;
+    }
+
+    if (!phone) {
+      setDriverFormError("กรุณาระบุเบอร์โทรศัพท์");
+      return;
+    }
+
+    if (!isEdit && !driverForm.imageFile) {
+      setDriverFormError("กรุณาเลือกรูปภาพ");
+      return;
+    }
+
+    if (isEdit && !editingDriverId) {
+      setDriverFormError("ไม่พบรหัสพนักงานขับรถ");
+      return;
+    }
+
+    const formData = new FormData();
+    if (isEdit) {
+      formData.append("id", String(editingDriverId));
+    }
+    formData.append("name", name);
+    formData.append("phone", phone);
+    if (driverForm.imageFile) {
+      formData.append("image", driverForm.imageFile);
+    }
+
+    setIsSubmittingDriver(true);
+    try {
+      await submitFormData("/api/company-assets/drivers", isEdit ? "PUT" : "POST", formData);
+      await loadDrivers();
+      handleCloseDriverModal();
+    } catch (error) {
+      console.error(isEdit ? "แก้ไขพนักงานขับรถไม่สำเร็จ" : "เพิ่มพนักงานขับรถไม่สำเร็จ", error);
+      setDriverFormError(
+        error?.message || (isEdit ? "ไม่สามารถแก้ไขพนักงานขับรถได้" : "ไม่สามารถเพิ่มพนักงานขับรถได้")
+      );
+    } finally {
+      setIsSubmittingDriver(false);
+    }
+  };
+
+  const handleDeleteDriver = async (driver) => {
+    if (!driver?.id || deletingDriverId === driver.id) return;
+    const confirmed = window.confirm(`ยืนยันการลบพนักงานขับรถ ${driver.name || ""}?`);
+    if (!confirmed) return;
+
+    setDeletingDriverId(driver.id);
+    try {
+      await deleteJSON("/api/company-assets/drivers", { id: driver.id });
+      await loadDrivers();
+    } catch (error) {
+      console.error("ลบพนักงานขับรถไม่สำเร็จ", error);
+      window.alert(error?.message || "ไม่สามารถลบพนักงานขับรถได้");
+    } finally {
+      setDeletingDriverId(null);
+    }
+  };
+
+  const handleSubmitVehicle = async (event) => {
+    event.preventDefault();
+    if (isSubmittingVehicle) return;
+    setVehicleFormError("");
+
+    const name = vehicleForm.name.trim();
+    const registration = vehicleForm.registration.trim();
+    const vehicleType = vehicleForm.vehicleType.trim();
+    const isEdit = vehicleModalMode === "edit";
+
+    if (!name) {
+      setVehicleFormError("กรุณาระบุชื่อรถ");
+      return;
+    }
+
+    if (!registration) {
+      setVehicleFormError("กรุณาระบุทะเบียนรถ");
+      return;
+    }
+
+    if (!vehicleType) {
+      setVehicleFormError("กรุณาระบุประเภทรถ");
+      return;
+    }
+
+    if (!isEdit && !vehicleForm.imageFile) {
+      setVehicleFormError("กรุณาเลือกรูปภาพ");
+      return;
+    }
+
+    if (isEdit && !editingVehicleId) {
+      setVehicleFormError("ไม่พบรหัสรถบริษัท");
+      return;
+    }
+
+    const formData = new FormData();
+    if (isEdit) {
+      formData.append("id", String(editingVehicleId));
+    }
+    formData.append("name", name);
+    formData.append("registration", registration);
+    formData.append("vehicleType", vehicleType);
+    if (vehicleForm.imageFile) {
+      formData.append("image", vehicleForm.imageFile);
+    }
+
+    setIsSubmittingVehicle(true);
+    try {
+      await submitFormData("/api/company-assets/vehicles", isEdit ? "PUT" : "POST", formData);
+      await loadVehicles();
+      handleCloseVehicleModal();
+    } catch (error) {
+      console.error(isEdit ? "แก้ไขรถบริษัทไม่สำเร็จ" : "เพิ่มรถบริษัทไม่สำเร็จ", error);
+      setVehicleFormError(
+        error?.message || (isEdit ? "ไม่สามารถแก้ไขรถบริษัทได้" : "ไม่สามารถเพิ่มรถบริษัทได้")
+      );
+    } finally {
+      setIsSubmittingVehicle(false);
+    }
+  };
+
+  const handleDeleteVehicle = async (vehicle) => {
+    if (!vehicle?.id || deletingVehicleId === vehicle.id) return;
+    const confirmed = window.confirm(`ยืนยันการลบรถ ${vehicle.name || ""}?`);
+    if (!confirmed) return;
+
+    setDeletingVehicleId(vehicle.id);
+    try {
+      await deleteJSON("/api/company-assets/vehicles", { id: vehicle.id });
+      await loadVehicles();
+    } catch (error) {
+      console.error("ลบรถบริษัทไม่สำเร็จ", error);
+      window.alert(error?.message || "ไม่สามารถลบรถบริษัทได้");
+    } finally {
+      setDeletingVehicleId(null);
+    }
   };
 
   const handleDeleteUser = async (user) => {
@@ -1190,7 +1524,7 @@ export default function UserManagementClient() {
             <span style={styles.tableTitleInner}>
               <FaUserTie size={22} /> รายชื่อพนักงานขับรถบริษัทฯ
             </span>
-            <button type="button" style={styles.actionButton("ghost")}>
+            <button type="button" style={styles.actionButton("ghost")} onClick={handleOpenDriverModal}>
               <FaUserPlus size={16} /> เพิ่มพนักงานขับรถ
             </button>
           </header>
@@ -1206,30 +1540,67 @@ export default function UserManagementClient() {
               </tr>
             </thead>
             <tbody>
-              {drivers.map((driver) => (
-                <tr key={driver.id} style={styles.tableRow}>
-                  <td style={styles.tableCell}>
-                    <span style={styles.userCell}>
-                      <FaUserTie size={22} color="#8fa3c7" />
-                      {driver.name}
-                    </span>
-                  </td>
-                  <td style={styles.tableCell}>{driver.phone}</td>
-                  <td style={{ ...styles.tableCell, textAlign: "center" }}>
-                    <div style={{ ...styles.actionGroup, width: "100%", justifyContent: "center" }}>
-                      <button type="button" style={styles.actionButton("primary")}>
-                        <FaPenToSquare size={14} /> แก้ไข
-                      </button>
-                      <button type="button" style={styles.actionButton("ghost")}>
-                        <FaRegImages size={14} /> ดูรูป
-                      </button>
-                      <button type="button" style={styles.actionButton("danger")}>
-                        <FaTrashCan size={14} /> ลบ
-                      </button>
-                    </div>
+              {isLoadingDrivers ? (
+                <tr>
+                  <td colSpan={3} style={styles.tableEmpty}>
+                    กำลังโหลดข้อมูล...
                   </td>
                 </tr>
-              ))}
+              ) : drivers.length === 0 ? (
+                <tr>
+                  <td colSpan={3} style={styles.tableEmpty}>
+                    ยังไม่มีข้อมูลพนักงานขับรถ
+                  </td>
+                </tr>
+              ) : (
+                drivers.map((driver) => (
+                  <tr key={driver.id} style={styles.tableRow}>
+                    <td style={styles.tableCell}>
+                      <span style={styles.userCell}>
+                        <FaUserTie size={22} color="#8fa3c7" />
+                        {driver.name}
+                      </span>
+                    </td>
+                    <td style={styles.tableCell}>{driver.phone || "-"}</td>
+                    <td style={{ ...styles.tableCell, textAlign: "center" }}>
+                      <div style={{ ...styles.actionGroup, width: "100%", justifyContent: "center" }}>
+                        <button
+                          type="button"
+                          style={styles.actionButton("primary")}
+                          onClick={() => handleOpenEditDriverModal(driver)}
+                        >
+                          <FaPenToSquare size={14} /> แก้ไข
+                        </button>
+                        <button
+                          type="button"
+                          style={{
+                            ...styles.actionButton("ghost"),
+                            opacity: driver.photoUrl ? 1 : 0.5,
+                            pointerEvents: driver.photoUrl ? "auto" : "none",
+                          }}
+                          onClick={() => openImagePreview(driver.name, driver.photoUrl)}
+                          disabled={!driver.photoUrl}
+                        >
+                          <FaRegImages size={14} /> ดูรูป
+                        </button>
+                        <button
+                          type="button"
+                          style={{
+                            ...styles.actionButton("danger"),
+                            opacity: deletingDriverId === driver.id ? 0.6 : 1,
+                            cursor: deletingDriverId === driver.id ? "not-allowed" : "pointer",
+                          }}
+                          onClick={() => handleDeleteDriver(driver)}
+                          disabled={deletingDriverId === driver.id}
+                        >
+                          <FaTrashCan size={14} />
+                          {deletingDriverId === driver.id ? " กำลังลบ..." : " ลบ"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </section>
@@ -1239,7 +1610,7 @@ export default function UserManagementClient() {
             <span style={styles.tableTitleInner}>
               <FaCarSide size={22} /> รถบริษัท
             </span>
-            <button type="button" style={styles.actionButton("ghost")}>
+            <button type="button" style={styles.actionButton("ghost")} onClick={handleOpenVehicleModal}>
               <FaCarSide size={16} /> เพิ่มรถบริษัท
             </button>
           </header>
@@ -1256,31 +1627,68 @@ export default function UserManagementClient() {
               </tr>
             </thead>
             <tbody>
-              {vehicles.map((vehicle) => (
-                <tr key={vehicle.id} style={styles.tableRow}>
-                  <td style={styles.tableCell}>
-                    <span style={styles.userCell}>
-                      <FaCarSide size={22} color="#8fa3c7" />
-                      {vehicle.name}
-                    </span>
-                  </td>
-                  <td style={styles.tableCell}>{vehicle.registration}</td>
-                  <td style={styles.tableCell}>{vehicle.type}</td>
-                  <td style={{ ...styles.tableCell, textAlign: "center" }}>
-                    <div style={{ ...styles.actionGroup, width: "100%", justifyContent: "center" }}>
-                      <button type="button" style={styles.actionButton("primary")}>
-                        <FaPenToSquare size={14} /> แก้ไข
-                      </button>
-                      <button type="button" style={styles.actionButton("ghost")}>
-                        <FaRegImages size={14} /> ดูรูป
-                      </button>
-                      <button type="button" style={styles.actionButton("danger")}>
-                        <FaTrashCan size={14} /> ลบ
-                      </button>
-                    </div>
+              {isLoadingVehicles ? (
+                <tr>
+                  <td colSpan={4} style={styles.tableEmpty}>
+                    กำลังโหลดข้อมูล...
                   </td>
                 </tr>
-              ))}
+              ) : vehicles.length === 0 ? (
+                <tr>
+                  <td colSpan={4} style={styles.tableEmpty}>
+                    ยังไม่มีข้อมูลรถบริษัท
+                  </td>
+                </tr>
+              ) : (
+                vehicles.map((vehicle) => (
+                  <tr key={vehicle.id} style={styles.tableRow}>
+                    <td style={styles.tableCell}>
+                      <span style={styles.userCell}>
+                        <FaCarSide size={22} color="#8fa3c7" />
+                        {vehicle.name}
+                      </span>
+                    </td>
+                    <td style={styles.tableCell}>{vehicle.registration}</td>
+                    <td style={styles.tableCell}>{vehicle.vehicleType}</td>
+                    <td style={{ ...styles.tableCell, textAlign: "center" }}>
+                      <div style={{ ...styles.actionGroup, width: "100%", justifyContent: "center" }}>
+                        <button
+                          type="button"
+                          style={styles.actionButton("primary")}
+                          onClick={() => handleOpenEditVehicleModal(vehicle)}
+                        >
+                          <FaPenToSquare size={14} /> แก้ไข
+                        </button>
+                        <button
+                          type="button"
+                          style={{
+                            ...styles.actionButton("ghost"),
+                            opacity: vehicle.photoUrl ? 1 : 0.5,
+                            pointerEvents: vehicle.photoUrl ? "auto" : "none",
+                          }}
+                          onClick={() => openImagePreview(vehicle.name, vehicle.photoUrl)}
+                          disabled={!vehicle.photoUrl}
+                        >
+                          <FaRegImages size={14} /> ดูรูป
+                        </button>
+                        <button
+                          type="button"
+                          style={{
+                            ...styles.actionButton("danger"),
+                            opacity: deletingVehicleId === vehicle.id ? 0.6 : 1,
+                            cursor: deletingVehicleId === vehicle.id ? "not-allowed" : "pointer",
+                          }}
+                          onClick={() => handleDeleteVehicle(vehicle)}
+                          disabled={deletingVehicleId === vehicle.id}
+                        >
+                          <FaTrashCan size={14} />
+                          {deletingVehicleId === vehicle.id ? " กำลังลบ..." : " ลบ"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </section>
@@ -1747,6 +2155,288 @@ export default function UserManagementClient() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {isDriverModalOpen && (
+        <div style={styles.modalOverlay} onClick={handleCloseDriverModal}>
+          <form
+            style={styles.modalContent}
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={handleSubmitDriver}
+            encType="multipart/form-data"
+          >
+            <header style={styles.modalHeader}>
+              <span style={styles.modalTitle}>
+                {driverModalMode === "edit" ? "แก้ไขพนักงานขับรถ" : "เพิ่มพนักงานขับรถ"}
+              </span>
+              <button
+                type="button"
+                style={styles.modalClose}
+                onClick={handleCloseDriverModal}
+                aria-label="ปิดหน้าต่าง"
+              >
+                ×
+              </button>
+            </header>
+
+            <div style={styles.modalBody}>
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel} htmlFor="driver-name">
+                  ชื่อพนักงานขับรถ
+                </label>
+                <input
+                  id="driver-name"
+                  type="text"
+                  style={styles.input}
+                  value={driverForm.name}
+                  onChange={(event) =>
+                    setDriverForm((prev) => ({ ...prev, name: event.target.value }))
+                  }
+                  required
+                />
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel} htmlFor="driver-phone">
+                  เบอร์โทรศัพท์
+                </label>
+                <input
+                  id="driver-phone"
+                  type="tel"
+                  style={styles.input}
+                  value={driverForm.phone}
+                  onChange={(event) =>
+                    setDriverForm((prev) => ({ ...prev, phone: event.target.value }))
+                  }
+                  required
+                />
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel} htmlFor="driver-image">
+                  รูปภาพพนักงานขับรถ
+                </label>
+                <input
+                  id="driver-image"
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  style={styles.input}
+                  onChange={handleDriverImageChange}
+                />
+                <p style={styles.helperText}>รองรับไฟล์ JPG หรือ PNG ขนาดไม่เกิน 5 MB</p>
+                {driverModalMode === "edit" && (
+                  <p style={styles.helperText}>หากไม่ต้องการเปลี่ยนรูป ให้เว้นว่างไว้</p>
+                )}
+                {driverForm.imagePreview && (
+                  <Image
+                    src={driverForm.imagePreview}
+                    alt={driverForm.name ? `ตัวอย่างรูปของ ${driverForm.name}` : "ตัวอย่างรูปพนักงาน"}
+                    width={600}
+                    height={400}
+                    style={styles.imagePreview}
+                    unoptimized
+                  />
+                )}
+              </div>
+            </div>
+
+            {driverFormError && (
+              <p style={{ ...styles.errorText, padding: "0 26px" }}>{driverFormError}</p>
+            )}
+
+            <div style={styles.modalActions}>
+              <button
+                type="button"
+                style={styles.actionButton("ghost")}
+                onClick={handleCloseDriverModal}
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="submit"
+                style={{
+                  ...styles.actionButton("primary"),
+                  opacity: isSubmittingDriver ? 0.7 : 1,
+                  pointerEvents: isSubmittingDriver ? "none" : "auto",
+                }}
+                disabled={isSubmittingDriver}
+              >
+                {isSubmittingDriver
+                  ? "กำลังบันทึก..."
+                  : driverModalMode === "edit"
+                    ? "บันทึกการแก้ไข"
+                    : "บันทึก"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {isVehicleModalOpen && (
+        <div style={styles.modalOverlay} onClick={handleCloseVehicleModal}>
+          <form
+            style={styles.modalContent}
+            onClick={(event) => event.stopPropagation()}
+            onSubmit={handleSubmitVehicle}
+            encType="multipart/form-data"
+          >
+            <header style={styles.modalHeader}>
+              <span style={styles.modalTitle}>
+                {vehicleModalMode === "edit" ? "แก้ไขรถบริษัท" : "เพิ่มรถบริษัท"}
+              </span>
+              <button
+                type="button"
+                style={styles.modalClose}
+                onClick={handleCloseVehicleModal}
+                aria-label="ปิดหน้าต่าง"
+              >
+                ×
+              </button>
+            </header>
+
+            <div style={styles.modalBody}>
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel} htmlFor="vehicle-name">
+                  ชื่อรถ
+                </label>
+                <input
+                  id="vehicle-name"
+                  type="text"
+                  style={styles.input}
+                  value={vehicleForm.name}
+                  onChange={(event) =>
+                    setVehicleForm((prev) => ({ ...prev, name: event.target.value }))
+                  }
+                  required
+                />
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel} htmlFor="vehicle-registration">
+                  ทะเบียนรถ
+                </label>
+                <input
+                  id="vehicle-registration"
+                  type="text"
+                  style={styles.input}
+                  value={vehicleForm.registration}
+                  onChange={(event) =>
+                    setVehicleForm((prev) => ({ ...prev, registration: event.target.value }))
+                  }
+                  required
+                />
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel} htmlFor="vehicle-type">
+                  ประเภทรถ
+                </label>
+                <input
+                  id="vehicle-type"
+                  type="text"
+                  style={styles.input}
+                  value={vehicleForm.vehicleType}
+                  onChange={(event) =>
+                    setVehicleForm((prev) => ({ ...prev, vehicleType: event.target.value }))
+                  }
+                  required
+                />
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel} htmlFor="vehicle-image">
+                  รูปรถบริษัท
+                </label>
+                <input
+                  id="vehicle-image"
+                  type="file"
+                  accept="image/png,image/jpeg"
+                  style={styles.input}
+                  onChange={handleVehicleImageChange}
+                />
+                <p style={styles.helperText}>รองรับไฟล์ JPG หรือ PNG ขนาดไม่เกิน 5 MB</p>
+                {vehicleModalMode === "edit" && (
+                  <p style={styles.helperText}>หากไม่ต้องการเปลี่ยนรูป ให้เว้นว่างไว้</p>
+                )}
+                {vehicleForm.imagePreview && (
+                  <Image
+                    src={vehicleForm.imagePreview}
+                    alt={vehicleForm.name ? `ตัวอย่างรูปของ ${vehicleForm.name}` : "ตัวอย่างรูปรถ"}
+                    width={600}
+                    height={400}
+                    style={styles.imagePreview}
+                    unoptimized
+                  />
+                )}
+              </div>
+            </div>
+
+            {vehicleFormError && (
+              <p style={{ ...styles.errorText, padding: "0 26px" }}>{vehicleFormError}</p>
+            )}
+
+            <div style={styles.modalActions}>
+              <button
+                type="button"
+                style={styles.actionButton("ghost")}
+                onClick={handleCloseVehicleModal}
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="submit"
+                style={{
+                  ...styles.actionButton("primary"),
+                  opacity: isSubmittingVehicle ? 0.7 : 1,
+                  pointerEvents: isSubmittingVehicle ? "none" : "auto",
+                }}
+                disabled={isSubmittingVehicle}
+              >
+                {isSubmittingVehicle
+                  ? "กำลังบันทึก..."
+                  : vehicleModalMode === "edit"
+                    ? "บันทึกการแก้ไข"
+                    : "บันทึก"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {imagePreviewModal.isOpen && imagePreviewModal.url && (
+        <div style={styles.modalOverlay} onClick={closeImagePreview}>
+          <div
+            style={{ ...styles.modalContent, maxWidth: "640px" }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header style={styles.modalHeader}>
+              <span style={styles.modalTitle}>{imagePreviewModal.title || "ดูรูปภาพ"}</span>
+              <button
+                type="button"
+                style={styles.modalClose}
+                onClick={closeImagePreview}
+                aria-label="ปิดหน้าต่าง"
+              >
+                ×
+              </button>
+            </header>
+            <div style={{ padding: "24px 26px" }}>
+              <Image
+                src={imagePreviewModal.url}
+                alt={imagePreviewModal.title || "แสดงตัวอย่างรูปภาพ"}
+                width={640}
+                height={460}
+                style={{
+                  ...styles.imagePreview,
+                  maxHeight: "460px",
+                  objectFit: "contain",
+                  backgroundColor: "#f5f8ff",
+                }}
+                unoptimized
+              />
+            </div>
+          </div>
         </div>
       )}
     </DashboardShell>

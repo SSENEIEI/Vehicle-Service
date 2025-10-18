@@ -71,6 +71,26 @@ CREATE TABLE IF NOT EXISTS `users` (
   CONSTRAINT `fk_users_division` FOREIGN KEY (`division_id`) REFERENCES `divisions`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS `company_drivers` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `name` VARCHAR(150) NOT NULL,
+  `phone` VARCHAR(30) NOT NULL,
+  `photo_url` TEXT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `company_vehicles` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `name` VARCHAR(150) NOT NULL,
+  `registration` VARCHAR(50) NOT NULL,
+  `vehicle_type` VARCHAR(50) NOT NULL,
+  `photo_url` TEXT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `uniq_vehicle_registration` (`registration`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 INSERT INTO `users` (`username`, `password_hash`, `email`, `role`, `status`)
 VALUES ('gaservice', '$2b$10$R9ObxUutkMVUUG6qKIHAYuG5RZT0xG9WuWo9mhHd/95AJO1TW9Kg2', NULL, 'admin', 'active')
 ON DUPLICATE KEY UPDATE

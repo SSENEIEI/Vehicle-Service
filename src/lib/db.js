@@ -188,6 +188,30 @@ export async function initDatabase({ seed = true } = {}) {
     `);
 
     await exec(`
+      CREATE TABLE IF NOT EXISTS company_drivers (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(150) NOT NULL,
+        phone VARCHAR(30) NOT NULL,
+        photo_url TEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await exec(`
+      CREATE TABLE IF NOT EXISTS company_vehicles (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(150) NOT NULL,
+        registration VARCHAR(50) NOT NULL,
+        vehicle_type VARCHAR(50) NOT NULL,
+        photo_url TEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_vehicle_registration (registration)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await exec(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
         username VARCHAR(50) NOT NULL UNIQUE,
