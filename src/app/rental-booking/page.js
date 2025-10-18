@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { DEFAULT_ROLE, ROLE_LABELS, getMenuItemsForRole, normalizeRole } from "@/lib/menuItems";
+import { fetchJSON } from "@/lib/http";
 import {
   FaKey,
   FaLocationDot,
@@ -351,6 +352,17 @@ const styles = {
     color: colors.textLight,
     textAlign: "right",
   },
+  helperText: {
+    fontSize: "13px",
+    color: colors.textLight,
+    marginTop: "6px",
+  },
+  errorText: {
+    margin: "0 0 12px",
+    fontSize: "14px",
+    fontWeight: "600",
+    color: "#c0392b",
+  },
 };
 
   function LabeledField({ label, required = false, children }) {
@@ -375,6 +387,16 @@ const styles = {
       factory: "",
     });
     const [dropOffCount, setDropOffCount] = useState(1);
+    const [factories, setFactories] = useState([]);
+    const [divisions, setDivisions] = useState([]);
+    const [departments, setDepartments] = useState([]);
+    const [isLoadingOrgOptions, setIsLoadingOrgOptions] = useState(false);
+    const [orgOptionsError, setOrgOptionsError] = useState("");
+    const [requesterOrgForm, setRequesterOrgForm] = useState({
+      factory: "",
+      division: "",
+      department: "",
+    });
 
     useEffect(() => {
       try {
@@ -408,6 +430,65 @@ const styles = {
       }
     }, []);
 
+    useEffect(() => {
+      let cancelled = false;
+
+      async function loadOrgOptions() {
+        setIsLoadingOrgOptions(true);
+        setOrgOptionsError("");
+        try {
+          const [factoryData, divisionData, departmentData] = await Promise.all([
+            fetchJSON("/api/user-management/factories"),
+            fetchJSON("/api/user-management/divisions"),
+            fetchJSON("/api/user-management/departments"),
+          ]);
+
+          if (cancelled) {
+            return;
+          }
+
+          setFactories(factoryData?.factories || []);
+          setDivisions(divisionData?.divisions || []);
+          setDepartments(departmentData?.departments || []);
+
+          if (!factoryData || !divisionData || !departmentData) {
+            setOrgOptionsError("ไม่สามารถโหลดข้อมูลโรงงาน/ฝ่าย/แผนกได้");
+          }
+        } catch (error) {
+          if (!cancelled) {
+            console.error("โหลดข้อมูลหน่วยงานไม่สำเร็จ", error);
+            setOrgOptionsError("ไม่สามารถโหลดข้อมูลโรงงาน/ฝ่าย/แผนกได้");
+          }
+        } finally {
+          if (!cancelled) {
+            setIsLoadingOrgOptions(false);
+          }
+        }
+      }
+
+      loadOrgOptions();
+
+      return () => {
+        cancelled = true;
+      };
+    }, []);
+
+    const divisionOptions = useMemo(() => {
+      const selectedFactoryId = Number(requesterOrgForm.factory);
+      if (!selectedFactoryId) {
+        return [];
+      }
+      return divisions.filter((division) => Number(division.factoryId) === selectedFactoryId);
+    }, [divisions, requesterOrgForm.factory]);
+
+    const departmentOptions = useMemo(() => {
+      const selectedDivisionId = Number(requesterOrgForm.division);
+      if (!selectedDivisionId) {
+        return [];
+      }
+      return departments.filter((department) => Number(department.divisionId) === selectedDivisionId);
+    }, [departments, requesterOrgForm.division]);
+
     const normalizedRole = normalizeRole(userRole);
     const visibleMenuItems = useMemo(() => getMenuItemsForRole(normalizedRole), [normalizedRole]);
     const roleLabel = ROLE_LABELS[normalizedRole] || normalizedRole;
@@ -430,6 +511,33 @@ const styles = {
 
     const handleAddDropOffPoint = () => {
       setDropOffCount((count) => count + 1);
+    };
+
+    const handleFactoryChange = (event) => {
+      const { value } = event.target;
+      setRequesterOrgForm((prev) => ({
+        ...prev,
+        factory: value,
+        division: "",
+        department: "",
+      }));
+    };
+
+    const handleDivisionChange = (event) => {
+      const { value } = event.target;
+      setRequesterOrgForm((prev) => ({
+        ...prev,
+        division: value,
+        department: "",
+      }));
+    };
+
+    const handleDepartmentChange = (event) => {
+      const { value } = event.target;
+      setRequesterOrgForm((prev) => ({
+        ...prev,
+        department: value,
+      }));
     };
 
     return (
@@ -501,6 +609,7 @@ const styles = {
                 <p style={{ color: colors.textLight, margin: 0, fontSize: "14px" }}>
                   โปรดกรอกข้อมูลให้ครบถ้วน เพื่อใช้ในการติดต่อประสานงาน
                 </p>
+                {orgOptionsError ? <p style={styles.errorText}>{orgOptionsError}</p> : null}
                 <div style={styles.formGrid(3)}>
                   <LabeledField label="รหัสพนักงานผู้จอง" required>
                     <input style={styles.input} />
@@ -509,25 +618,72 @@ const styles = {
                     <input style={styles.input} />
                   </LabeledField>
                   <LabeledField label="โรงงาน" required>
-                    <select style={styles.input}>
-                      <option>เลือกโรงงาน</option>
-                      <option>โรงงาน 1</option>
-                      <option>โรงงาน 2</option>
+                    <select
+                      style={styles.input}
+                      value={requesterOrgForm.factory}
+                      onChange={handleFactoryChange}
+                      disabled={isLoadingOrgOptions && factories.length === 0}
+                    >
+                      <option value="" disabled>
+                        {isLoadingOrgOptions ? "กำลังโหลด..." : "เลือกโรงงาน"}
+                      </option>
+                      {factories.map((factory) => (
+                        <option key={factory.id} value={String(factory.id)}>
+                          {factory.name}
+                        </option>
+                      ))}
                     </select>
-                  </LabeledField>
-                  <LabeledField label="แผนก" required>
-                    <select style={styles.input}>
-                      <option>เลือกแผนก</option>
-                      <option>GA Service</option>
-                      <option>Operation</option>
-                    </select>
+                    {!isLoadingOrgOptions && factories.length === 0 ? (
+                      <p style={styles.helperText}>ยังไม่มีข้อมูลโรงงาน</p>
+                    ) : null}
                   </LabeledField>
                   <LabeledField label="ฝ่าย" required>
-                    <select style={styles.input}>
-                      <option>เลือกฝ่าย</option>
-                      <option>GA</option>
-                      <option>SAC</option>
+                    <select
+                      style={styles.input}
+                      value={requesterOrgForm.division}
+                      onChange={handleDivisionChange}
+                      disabled={!requesterOrgForm.factory || isLoadingOrgOptions}
+                    >
+                      <option value="" disabled>
+                        {!requesterOrgForm.factory
+                          ? "เลือกโรงงานก่อน"
+                          : isLoadingOrgOptions
+                          ? "กำลังโหลด..."
+                          : "เลือกฝ่าย"}
+                      </option>
+                      {divisionOptions.map((division) => (
+                        <option key={division.id} value={String(division.id)}>
+                          {division.name}
+                        </option>
+                      ))}
                     </select>
+                    {requesterOrgForm.factory && !isLoadingOrgOptions && divisionOptions.length === 0 ? (
+                      <p style={styles.helperText}>ยังไม่มีข้อมูลฝ่ายในโรงงานนี้</p>
+                    ) : null}
+                  </LabeledField>
+                  <LabeledField label="แผนก" required>
+                    <select
+                      style={styles.input}
+                      value={requesterOrgForm.department}
+                      onChange={handleDepartmentChange}
+                      disabled={!requesterOrgForm.division || isLoadingOrgOptions}
+                    >
+                      <option value="" disabled>
+                        {!requesterOrgForm.division
+                          ? "เลือกฝ่ายก่อน"
+                          : isLoadingOrgOptions
+                          ? "กำลังโหลด..."
+                          : "เลือกแผนก"}
+                      </option>
+                      {departmentOptions.map((department) => (
+                        <option key={department.id} value={String(department.id)}>
+                          {department.name}
+                        </option>
+                      ))}
+                    </select>
+                    {requesterOrgForm.division && !isLoadingOrgOptions && departmentOptions.length === 0 ? (
+                      <p style={styles.helperText}>ยังไม่มีข้อมูลแผนกในฝ่ายนี้</p>
+                    ) : null}
                   </LabeledField>
                   <LabeledField label="เบอร์ติดต่อกลับ" required>
                     <input style={styles.input} />
