@@ -363,6 +363,10 @@ const styles = {
     fontWeight: "600",
     color: "#c0392b",
   },
+  disabledCard: {
+    opacity: 0.6,
+    pointerEvents: "none",
+  },
 };
 
 function LabeledField({ label, required = false, children }) {
@@ -492,6 +496,7 @@ export default function CompanyBookingPage() {
   const normalizedRole = normalizeRole(userRole);
   const visibleMenuItems = useMemo(() => getMenuItemsForRole(normalizedRole), [normalizedRole]);
   const roleLabel = ROLE_LABELS[normalizedRole] || normalizedRole;
+  const isAdmin = normalizedRole === "admin";
   let welcomeText;
   if (normalizedRole === "admin") {
     welcomeText = "ผู้ดูแลระบบ";
@@ -834,7 +839,12 @@ export default function CompanyBookingPage() {
               </div>
             </section>
 
-            <section style={styles.sectionCard}>
+            <section
+              style={{
+                ...styles.sectionCard,
+                ...(isAdmin ? {} : styles.disabledCard),
+              }}
+            >
               <div style={styles.sectionHeader}>
                 <FaUsers size={20} /> สำหรับพนักงาน GA Service
               </div>
@@ -843,34 +853,34 @@ export default function CompanyBookingPage() {
               </p>
               <div style={styles.formGrid(3)}>
                 <LabeledField label="ยืนยันพนักงานขับรถ" required>
-                  <input style={styles.input}  />
+                  <input style={styles.input} disabled={!isAdmin} />
                 </LabeledField>
                 <LabeledField label="เบอร์โทรพนักงานขับรถ" required>
-                  <input style={styles.input}  />
+                  <input style={styles.input} disabled={!isAdmin} />
                 </LabeledField>
                 <LabeledField label="ยืนยันรถที่ใช้" required>
-                  <select style={styles.input}>
+                  <select style={styles.input} disabled={!isAdmin}>
                     <option>เลือกรถ</option>
                     <option>5ก-5902</option>
                     <option>7ก-2087</option>
                   </select>
                 </LabeledField>
                 <LabeledField label="ประเภทรถ" required>
-                  <select style={styles.input}>
+                  <select style={styles.input} disabled={!isAdmin}>
                     <option>ระบุ</option>
                     <option>รถเก๋ง</option>
                     <option>รถตู้</option>
                   </select>
                 </LabeledField>
                 <LabeledField label="สถานะการจอง" required>
-                  <select style={styles.input}>
+                  <select style={styles.input} disabled={!isAdmin}>
                     <option>ระบุ</option>
                     <option>อนุมัติ</option>
                     <option>ไม่อนุมัติ</option>
                   </select>
                 </LabeledField>
                 <LabeledField label="เหตุผลการไม่อนุมัติ" required>
-                  <input style={styles.input} />
+                  <input style={styles.input} disabled={!isAdmin} />
                 </LabeledField>
               </div>
             </section>
