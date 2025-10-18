@@ -10,7 +10,6 @@ export async function POST(request) {
     const body = await request.json();
     const username = String(body.username || "").trim();
     const password = String(body.password || "").trim();
-    const fullName = body.fullName ? String(body.fullName).trim() : null;
     const email = body.email ? String(body.email).trim() : null;
     const role = ALLOWED_ROLES.has(body.role) ? body.role : "staff";
 
@@ -25,8 +24,8 @@ export async function POST(request) {
 
     const passwordHash = await bcrypt.hash(password, 10);
     await query(
-      "INSERT INTO users (username, password_hash, full_name, email, role) VALUES (?, ?, ?, ?, ?)",
-      [username, passwordHash, fullName, email, role]
+      "INSERT INTO users (username, password_hash, email, role) VALUES (?, ?, ?, ?)",
+      [username, passwordHash, email, role]
     );
 
     return NextResponse.json({ message: "สมัครสมาชิกสำเร็จ" }, { status: 201 });

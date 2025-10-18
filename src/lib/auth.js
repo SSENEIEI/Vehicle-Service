@@ -14,7 +14,7 @@ export async function getUserFromRequest(request) {
 
     const decoded = jwt.verify(token, SECRET_KEY);
     const rows = await query(
-      'SELECT id, username, full_name, email, role, status, last_login_at, created_at, updated_at FROM users WHERE id = ?',
+      'SELECT id, username, email, role, status, last_login_at, created_at, updated_at FROM users WHERE id = ?',
       [decoded.userId]
     );
     if (!rows.length) return null;

@@ -11,7 +11,6 @@ export async function GET() {
       `SELECT
          u.id,
          u.username,
-         u.full_name AS fullName,
          u.email,
          u.role,
          u.status,
@@ -47,7 +46,6 @@ export async function POST(request) {
     const username = String(body?.username || "").trim();
     const password = String(body?.password || "").trim();
     const role = ALLOWED_ROLES.has(body?.role) ? body.role : "user";
-    const fullName = body?.fullName ? String(body.fullName).trim() : null;
     const email = body?.email ? String(body.email).trim() : null;
 
     const factoryId = Number(body?.factoryId);
@@ -125,16 +123,15 @@ export async function POST(request) {
 
     const passwordHash = await bcrypt.hash(password, 10);
     await query(
-      `INSERT INTO users (username, password_hash, full_name, email, role, factory_id, department_id, division_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [username, passwordHash, fullName || username, email, role, factoryId, departmentId, divisionId]
+      `INSERT INTO users (username, password_hash, email, role, factory_id, department_id, division_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [username, passwordHash, email, role, factoryId, departmentId, divisionId]
     );
 
     const [createdUser] = await query(
       `SELECT
          u.id,
          u.username,
-         u.full_name AS fullName,
          u.email,
          u.role,
          u.status,
@@ -173,9 +170,7 @@ export async function PUT(request) {
     const username = String(body?.username || "").trim();
     const role = ALLOWED_ROLES.has(body?.role) ? body.role : null;
     const passwordRaw = body?.password ? String(body.password).trim() : "";
-    const fullNameProvided = body?.fullName !== undefined;
     const emailProvided = body?.email !== undefined;
-    const fullName = fullNameProvided ? String(body.fullName || "").trim() : undefined;
     const email = emailProvided ? String(body.email || "").trim() : undefined;
     const factoryId = Number(body?.factoryId);
     const departmentId = Number(body?.departmentId);
@@ -248,11 +243,6 @@ export async function PUT(request) {
     const updateFields = ["username = ?", "role = ?", "factory_id = ?", "department_id = ?", "division_id = ?"];
     const params = [username, role, factoryId, departmentId, divisionId];
 
-    if (fullNameProvided) {
-      updateFields.push("full_name = ?");
-      params.push(fullName || null);
-    }
-
     if (emailProvided) {
       updateFields.push("email = ?");
       params.push(email || null);
@@ -271,7 +261,6 @@ export async function PUT(request) {
       `SELECT
          u.id,
          u.username,
-         u.full_name AS fullName,
          u.email,
          u.role,
          u.status,

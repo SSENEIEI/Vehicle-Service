@@ -886,22 +886,16 @@ export default function UserManagementClient() {
                   </td>
                 </tr>
               ) : (
-                users.map((user) => {
-                  const displayName = user.fullName || user.username;
-                  const showUsername = Boolean(user.fullName && user.fullName !== user.username);
-                  return (
-                    <tr key={user.id} style={styles.tableRow}>
-                      <td style={styles.tableCell}>
-                        <span style={styles.userCell}>
-                          <FaUserLarge size={24} color="#8fa3c7" />
-                          <span style={styles.userMeta}>
-                            <span>{displayName}</span>
-                            {showUsername && (
-                              <span style={styles.userMetaSecondary}>({user.username})</span>
-                            )}
-                          </span>
+                users.map((user) => (
+                  <tr key={user.id} style={styles.tableRow}>
+                    <td style={styles.tableCell}>
+                      <span style={styles.userCell}>
+                        <FaUserLarge size={24} color="#8fa3c7" />
+                        <span style={styles.userMeta}>
+                          <span>{user.username}</span>
                         </span>
-                      </td>
+                      </span>
+                    </td>
                       <td style={styles.tableCell}>{ROLE_LABELS[user.role] || user.role || "-"}</td>
                       <td style={styles.tableCell}>{user.factoryName || "-"}</td>
                       <td style={styles.tableCell}>{user.departmentName || "-"}</td>
@@ -931,8 +925,7 @@ export default function UserManagementClient() {
                         </div>
                       </td>
                     </tr>
-                  );
-                })
+                ))
               )}
             </tbody>
           </table>

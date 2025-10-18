@@ -104,9 +104,9 @@ async function seedDefaults(db) {
   if (adminRows.length === 0) {
     const hash = await bcrypt.hash(adminPassword, 10);
     await db.query(
-      `INSERT INTO users (username, password_hash, full_name, email, role, status)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [adminUsername, hash, 'Vehicle Service Admin', null, 'admin', 'active']
+      `INSERT INTO users (username, password_hash, email, role, status)
+       VALUES (?, ?, ?, ?, ?)`,
+      [adminUsername, hash, null, 'admin', 'active']
     );
   }
 }
@@ -192,7 +192,6 @@ export async function initDatabase({ seed = true } = {}) {
         id INT AUTO_INCREMENT PRIMARY KEY,
         username VARCHAR(50) NOT NULL UNIQUE,
         password_hash VARCHAR(255) NOT NULL,
-        full_name VARCHAR(100) NULL,
         email VARCHAR(100) NULL,
         role VARCHAR(30) NOT NULL,
         factory_id INT NULL,
@@ -212,9 +211,10 @@ export async function initDatabase({ seed = true } = {}) {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-    await exec(`ALTER TABLE users ADD COLUMN factory_id INT NULL`);
-    await exec(`ALTER TABLE users ADD COLUMN department_id INT NULL`);
-    await exec(`ALTER TABLE users ADD COLUMN division_id INT NULL`);
+  await exec(`ALTER TABLE users DROP COLUMN full_name`);
+  await exec(`ALTER TABLE users ADD COLUMN factory_id INT NULL`);
+  await exec(`ALTER TABLE users ADD COLUMN department_id INT NULL`);
+  await exec(`ALTER TABLE users ADD COLUMN division_id INT NULL`);
     await exec(`ALTER TABLE users ADD INDEX idx_users_factory (factory_id)`);
     await exec(`ALTER TABLE users ADD INDEX idx_users_department (department_id)`);
     await exec(`ALTER TABLE users ADD INDEX idx_users_division (division_id)`);

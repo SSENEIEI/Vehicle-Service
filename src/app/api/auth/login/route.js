@@ -17,7 +17,7 @@ export async function POST(request) {
     }
 
     const users = await query(
-      "SELECT id, username, password_hash, full_name, email, role, status FROM users WHERE username = ?",
+      "SELECT id, username, password_hash, email, role, status FROM users WHERE username = ?",
       [trimmedUsername]
     );
 
@@ -38,7 +38,6 @@ export async function POST(request) {
     const payload = {
       userId: user.id,
       username: user.username,
-      fullName: user.full_name,
       email: user.email,
       role: user.role,
     };
@@ -50,7 +49,6 @@ export async function POST(request) {
       user: {
         id: user.id,
         username: user.username,
-        fullName: user.full_name,
         email: user.email,
         role: user.role,
         status: user.status,

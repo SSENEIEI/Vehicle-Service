@@ -53,7 +53,6 @@ CREATE TABLE IF NOT EXISTS `users` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `username` VARCHAR(50) NOT NULL UNIQUE,
   `password_hash` VARCHAR(255) NOT NULL,
-  `full_name` VARCHAR(100) NULL,
   `email` VARCHAR(100) NULL,
   `role` VARCHAR(30) NOT NULL,
   `status` ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
@@ -72,8 +71,8 @@ CREATE TABLE IF NOT EXISTS `users` (
   CONSTRAINT `fk_users_division` FOREIGN KEY (`division_id`) REFERENCES `divisions`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-INSERT INTO `users` (`username`, `password_hash`, `full_name`, `email`, `role`, `status`)
-VALUES ('gaservice', '$2b$10$R9ObxUutkMVUUG6qKIHAYuG5RZT0xG9WuWo9mhHd/95AJO1TW9Kg2', 'Vehicle Service Admin', NULL, 'admin', 'active')
+INSERT INTO `users` (`username`, `password_hash`, `email`, `role`, `status`)
+VALUES ('gaservice', '$2b$10$R9ObxUutkMVUUG6qKIHAYuG5RZT0xG9WuWo9mhHd/95AJO1TW9Kg2', NULL, 'admin', 'active')
 ON DUPLICATE KEY UPDATE
   `role` = VALUES(`role`),
   `status` = VALUES(`status`);
