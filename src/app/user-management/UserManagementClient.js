@@ -253,7 +253,9 @@ const ROLE_LABELS = {
 };
 
 export default function UserManagementClient() {
-  const [isAddUserModalOpen, setIsAddUserModalOpen] = useState(false);
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [userModalMode, setUserModalMode] = useState("create");
+  const [editingUserId, setEditingUserId] = useState(null);
   const [userForm, setUserForm] = useState(createInitialUserForm);
   const [users, setUsers] = useState([]);
   const [factories, setFactories] = useState([]);
@@ -268,18 +270,29 @@ export default function UserManagementClient() {
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
   const [userFormError, setUserFormError] = useState("");
 
-  const [isAddFactoryModalOpen, setIsAddFactoryModalOpen] = useState(false);
-  const [factoryForm, setFactoryForm] = useState({ name: "" });
+  const [isFactoryModalOpen, setIsFactoryModalOpen] = useState(false);
+  const [factoryModalMode, setFactoryModalMode] = useState("create");
+  const [editingFactoryId, setEditingFactoryId] = useState(null);
+  const [factoryForm, setFactoryForm] = useState({ id: null, name: "" });
   const [factoryFormError, setFactoryFormError] = useState("");
   const [isSubmittingFactory, setIsSubmittingFactory] = useState(false);
 
-  const [isAddDepartmentModalOpen, setIsAddDepartmentModalOpen] = useState(false);
-  const [departmentForm, setDepartmentForm] = useState({ factoryId: "", name: "" });
+  const [isDepartmentModalOpen, setIsDepartmentModalOpen] = useState(false);
+  const [departmentModalMode, setDepartmentModalMode] = useState("create");
+  const [editingDepartmentId, setEditingDepartmentId] = useState(null);
+  const [departmentForm, setDepartmentForm] = useState({ id: null, factoryId: "", name: "" });
   const [departmentFormError, setDepartmentFormError] = useState("");
   const [isSubmittingDepartment, setIsSubmittingDepartment] = useState(false);
 
-  const [isAddDivisionModalOpen, setIsAddDivisionModalOpen] = useState(false);
-  const [divisionForm, setDivisionForm] = useState({ factoryId: "", departmentId: "", name: "" });
+  const [isDivisionModalOpen, setIsDivisionModalOpen] = useState(false);
+  const [divisionModalMode, setDivisionModalMode] = useState("create");
+  const [editingDivisionId, setEditingDivisionId] = useState(null);
+  const [divisionForm, setDivisionForm] = useState({
+    id: null,
+    factoryId: "",
+    departmentId: "",
+    name: "",
+  });
   const [divisionFormError, setDivisionFormError] = useState("");
   const [isSubmittingDivision, setIsSubmittingDivision] = useState(false);
 
@@ -288,49 +301,122 @@ export default function UserManagementClient() {
   };
 
   const handleOpenAddUserModal = () => {
+    setUserModalMode("create");
+    setEditingUserId(null);
+    setUserForm(createInitialUserForm());
     setUserFormError("");
-    setIsAddUserModalOpen(true);
+    setIsUserModalOpen(true);
   };
 
-  const handleCloseAddUserModal = () => {
-    setIsAddUserModalOpen(false);
+  const handleOpenEditUserModal = (user) => {
+    if (!user) return;
+    setUserModalMode("edit");
+    setEditingUserId(user.id ?? null);
+    setUserForm({
+      username: user.username || "",
+      password: "",
+      factory: user.factoryId ? String(user.factoryId) : "",
+      department: user.departmentId ? String(user.departmentId) : "",
+      division: user.divisionId ? String(user.divisionId) : "",
+      role: user.role || "",
+    });
+    setUserFormError("");
+    setIsUserModalOpen(true);
+  };
+
+  const handleCloseUserModal = () => {
+    setIsUserModalOpen(false);
+    setUserModalMode("create");
+    setEditingUserId(null);
     setUserFormError("");
     resetUserForm();
   };
 
   const handleOpenFactoryModal = () => {
-    setFactoryForm({ name: "" });
+    setFactoryModalMode("create");
+    setEditingFactoryId(null);
+    setFactoryForm({ id: null, name: "" });
     setFactoryFormError("");
-    setIsAddFactoryModalOpen(true);
+    setIsFactoryModalOpen(true);
+  };
+
+  const handleOpenEditFactoryModal = (factory) => {
+    if (!factory) return;
+    setFactoryModalMode("edit");
+    setEditingFactoryId(factory.id ?? null);
+    setFactoryForm({ id: factory.id ?? null, name: factory.name || "" });
+    setFactoryFormError("");
+    setIsFactoryModalOpen(true);
   };
 
   const handleCloseFactoryModal = () => {
-    setIsAddFactoryModalOpen(false);
-    setFactoryForm({ name: "" });
+    setIsFactoryModalOpen(false);
+    setFactoryModalMode("create");
+    setEditingFactoryId(null);
+    setFactoryForm({ id: null, name: "" });
     setFactoryFormError("");
   };
 
   const handleOpenDepartmentModal = () => {
-    setDepartmentForm((prev) => ({ factoryId: factories.length ? String(factories[0].id) : "", name: "" }));
+    setDepartmentModalMode("create");
+    setEditingDepartmentId(null);
+    setDepartmentForm({
+      id: null,
+      factoryId: factories.length ? String(factories[0].id) : "",
+      name: "",
+    });
     setDepartmentFormError("");
-    setIsAddDepartmentModalOpen(true);
+    setIsDepartmentModalOpen(true);
+  };
+
+  const handleOpenEditDepartmentModal = (department) => {
+    if (!department) return;
+    setDepartmentModalMode("edit");
+    setEditingDepartmentId(department.id ?? null);
+    setDepartmentForm({
+      id: department.id ?? null,
+      factoryId: department.factoryId ? String(department.factoryId) : "",
+      name: department.name || "",
+    });
+    setDepartmentFormError("");
+    setIsDepartmentModalOpen(true);
   };
 
   const handleCloseDepartmentModal = () => {
-    setIsAddDepartmentModalOpen(false);
-    setDepartmentForm({ factoryId: "", name: "" });
+    setIsDepartmentModalOpen(false);
+    setDepartmentModalMode("create");
+    setEditingDepartmentId(null);
+    setDepartmentForm({ id: null, factoryId: "", name: "" });
     setDepartmentFormError("");
   };
 
   const handleOpenDivisionModal = () => {
-    setDivisionForm({ factoryId: "", departmentId: "", name: "" });
+    setDivisionModalMode("create");
+    setEditingDivisionId(null);
+    setDivisionForm({ id: null, factoryId: "", departmentId: "", name: "" });
     setDivisionFormError("");
-    setIsAddDivisionModalOpen(true);
+    setIsDivisionModalOpen(true);
+  };
+
+  const handleOpenEditDivisionModal = (division) => {
+    if (!division) return;
+    setDivisionModalMode("edit");
+    setEditingDivisionId(division.id ?? null);
+    setDivisionForm({
+      id: division.id ?? null,
+      factoryId: division.factoryId ? String(division.factoryId) : "",
+      departmentId: division.departmentId ? String(division.departmentId) : "",
+      name: division.name || "",
+    });
+    setDivisionFormError("");
+    setIsDivisionModalOpen(true);
   };
 
   const handleCloseDivisionModal = () => {
-    setIsAddDivisionModalOpen(false);
-    setDivisionForm({ factoryId: "", departmentId: "", name: "" });
+    setIsDivisionModalOpen(false);
+    setDivisionModalMode("create");
+    setEditingDivisionId(null);
+    setDivisionForm({ id: null, factoryId: "", departmentId: "", name: "" });
     setDivisionFormError("");
   };
 
@@ -394,10 +480,10 @@ export default function UserManagementClient() {
   }, [loadUsers, loadFactories, loadDepartments, loadDivisions]);
 
   useEffect(() => {
-    if (isAddDepartmentModalOpen && factories.length && !departmentForm.factoryId) {
+    if (isDepartmentModalOpen && factories.length && !departmentForm.factoryId) {
       setDepartmentForm((prev) => ({ ...prev, factoryId: String(factories[0].id) }));
     }
-  }, [isAddDepartmentModalOpen, factories, departmentForm.factoryId]);
+  }, [isDepartmentModalOpen, factories, departmentForm.factoryId]);
 
   const handleInputChange = (field) => (event) => {
     const { value } = event.target;
@@ -441,38 +527,88 @@ export default function UserManagementClient() {
     return departments.filter((department) => Number(department.factoryId) === factoryId);
   }, [departments, divisionForm.factoryId]);
 
-  const handleSubmitAddUser = async (event) => {
+  const handleSubmitUser = async (event) => {
     event.preventDefault();
     if (isSubmittingUser) return;
     setUserFormError("");
 
-    const payload = {
-      username: userForm.username.trim(),
-      password: userForm.password.trim(),
-      role: userForm.role,
-      factoryId: userForm.factory ? Number(userForm.factory) : null,
-      departmentId: userForm.department ? Number(userForm.department) : null,
-      divisionId: userForm.division ? Number(userForm.division) : null,
-    };
+    const isEditing = userModalMode === "edit";
+    const username = userForm.username.trim();
+    const password = userForm.password.trim();
+    const role = userForm.role;
+    const factoryId = userForm.factory ? Number(userForm.factory) : null;
+    const departmentId = userForm.department ? Number(userForm.department) : null;
+    const divisionId = userForm.division ? Number(userForm.division) : null;
 
-    if (!payload.username || !payload.password) {
-      setUserFormError("กรุณากรอกข้อมูลให้ครบถ้วน");
+    if (!username) {
+      setUserFormError("กรุณากรอกชื่อผู้ใช้");
       return;
     }
 
-    if (!payload.factoryId || !payload.departmentId || !payload.divisionId) {
+    if (!role) {
+      setUserFormError("กรุณาเลือกบทบาทผู้ใช้");
+      return;
+    }
+
+    if (!factoryId || !departmentId || !divisionId) {
       setUserFormError("กรุณาเลือกโรงงาน แผนก และฝ่าย");
       return;
     }
 
+    if (!isEditing && !password) {
+      setUserFormError("กรุณากรอกรหัสผ่าน");
+      return;
+    }
+
+    const payload = {
+      username,
+      password,
+      role,
+      factoryId,
+      departmentId,
+      divisionId,
+    };
+
     setIsSubmittingUser(true);
     try {
-      await postJSON("/api/user-management/users", payload);
-      await loadUsers();
-      handleCloseAddUserModal();
+      if (isEditing) {
+        if (!editingUserId) {
+          throw new Error("ไม่พบรหัสผู้ใช้");
+        }
+
+        const selectedFactory = factories.find((factory) => factory.id === factoryId);
+        const selectedDepartment = departments.find((department) => department.id === departmentId);
+        const selectedDivision = divisions.find((division) => division.id === divisionId);
+
+        setUsers((prev) =>
+          prev.map((existing) =>
+            existing.id === editingUserId
+              ? {
+                  ...existing,
+                  username,
+                  role,
+                  factoryId,
+                  factoryName: selectedFactory?.name || existing.factoryName,
+                  departmentId,
+                  departmentName: selectedDepartment?.name || existing.departmentName,
+                  divisionId,
+                  divisionName: selectedDivision?.name || existing.divisionName,
+                }
+              : existing
+          )
+        );
+
+        handleCloseUserModal();
+      } else {
+        await postJSON("/api/user-management/users", payload);
+        await loadUsers();
+        handleCloseUserModal();
+      }
     } catch (error) {
-      console.error("เพิ่มผู้ใช้ไม่สำเร็จ", error);
-      setUserFormError(error?.message || "ไม่สามารถเพิ่มผู้ใช้ได้");
+      console.error(isEditing ? "แก้ไขผู้ใช้ไม่สำเร็จ (frontend)" : "เพิ่มผู้ใช้ไม่สำเร็จ", error);
+      setUserFormError(
+        error?.message || (isEditing ? "ไม่สามารถแก้ไขผู้ใช้ได้" : "ไม่สามารถเพิ่มผู้ใช้ได้")
+      );
     } finally {
       setIsSubmittingUser(false);
     }
@@ -483,6 +619,7 @@ export default function UserManagementClient() {
     if (isSubmittingFactory) return;
     setFactoryFormError("");
 
+    const isEditing = factoryModalMode === "edit";
     const name = factoryForm.name.trim();
     if (!name) {
       setFactoryFormError("กรุณาระบุชื่อโรงงาน");
@@ -491,12 +628,35 @@ export default function UserManagementClient() {
 
     setIsSubmittingFactory(true);
     try {
-      await postJSON("/api/user-management/factories", { name });
-      await loadFactories();
-      handleCloseFactoryModal();
+      if (isEditing) {
+        if (!editingFactoryId) {
+          throw new Error("ไม่พบรหัสโรงงาน");
+        }
+
+        setFactories((prev) =>
+          prev.map((factory) =>
+            factory.id === editingFactoryId
+              ? { ...factory, name }
+              : factory
+          )
+        );
+        setUsers((prev) =>
+          prev.map((user) =>
+            user.factoryId === editingFactoryId ? { ...user, factoryName: name } : user
+          )
+        );
+
+        handleCloseFactoryModal();
+      } else {
+        await postJSON("/api/user-management/factories", { name });
+        await loadFactories();
+        handleCloseFactoryModal();
+      }
     } catch (error) {
-      console.error("เพิ่มโรงงานไม่สำเร็จ", error);
-      setFactoryFormError(error?.message || "ไม่สามารถเพิ่มโรงงานได้");
+      console.error(isEditing ? "แก้ไขโรงงานไม่สำเร็จ (frontend)" : "เพิ่มโรงงานไม่สำเร็จ", error);
+      setFactoryFormError(
+        error?.message || (isEditing ? "ไม่สามารถแก้ไขโรงงานได้" : "ไม่สามารถเพิ่มโรงงานได้")
+      );
     } finally {
       setIsSubmittingFactory(false);
     }
@@ -507,6 +667,7 @@ export default function UserManagementClient() {
     if (isSubmittingDepartment) return;
     setDepartmentFormError("");
 
+    const isEditing = departmentModalMode === "edit";
     const factoryId = Number(departmentForm.factoryId);
     const name = departmentForm.name.trim();
 
@@ -522,12 +683,61 @@ export default function UserManagementClient() {
 
     setIsSubmittingDepartment(true);
     try {
-      await postJSON("/api/user-management/departments", { factoryId, name });
-      await loadDepartments();
-      handleCloseDepartmentModal();
+      if (isEditing) {
+        if (!editingDepartmentId) {
+          throw new Error("ไม่พบรหัสแผนก");
+        }
+
+        const selectedFactory = factories.find((factory) => factory.id === factoryId);
+
+        setDepartments((prev) =>
+          prev.map((department) =>
+            department.id === editingDepartmentId
+              ? {
+                  ...department,
+                  name,
+                  factoryId,
+                  factoryName: selectedFactory?.name || department.factoryName,
+                }
+              : department
+          )
+        );
+
+        setUsers((prev) =>
+          prev.map((user) =>
+            user.departmentId === editingDepartmentId
+              ? {
+                  ...user,
+                  departmentName: name,
+                }
+              : user
+          )
+        );
+
+        setDivisions((prev) =>
+          prev.map((division) =>
+            division.departmentId === editingDepartmentId
+              ? {
+                  ...division,
+                  departmentName: name,
+                  factoryId,
+                  factoryName: selectedFactory?.name || division.factoryName,
+                }
+              : division
+          )
+        );
+
+        handleCloseDepartmentModal();
+      } else {
+        await postJSON("/api/user-management/departments", { factoryId, name });
+        await loadDepartments();
+        handleCloseDepartmentModal();
+      }
     } catch (error) {
-      console.error("เพิ่มแผนกไม่สำเร็จ", error);
-      setDepartmentFormError(error?.message || "ไม่สามารถเพิ่มแผนกได้");
+      console.error(isEditing ? "แก้ไขแผนกไม่สำเร็จ (frontend)" : "เพิ่มแผนกไม่สำเร็จ", error);
+      setDepartmentFormError(
+        error?.message || (isEditing ? "ไม่สามารถแก้ไขแผนกได้" : "ไม่สามารถเพิ่มแผนกได้")
+      );
     } finally {
       setIsSubmittingDepartment(false);
     }
@@ -538,6 +748,7 @@ export default function UserManagementClient() {
     if (isSubmittingDivision) return;
     setDivisionFormError("");
 
+    const isEditing = divisionModalMode === "edit";
     const factoryId = Number(divisionForm.factoryId);
     const departmentId = Number(divisionForm.departmentId);
     const name = divisionForm.name.trim();
@@ -559,12 +770,51 @@ export default function UserManagementClient() {
 
     setIsSubmittingDivision(true);
     try {
-      await postJSON("/api/user-management/divisions", { factoryId, departmentId, name });
-      await loadDivisions();
-      handleCloseDivisionModal();
+      if (isEditing) {
+        if (!editingDivisionId) {
+          throw new Error("ไม่พบรหัสฝ่าย");
+        }
+
+        const selectedFactory = factories.find((factory) => factory.id === factoryId);
+        const selectedDepartment = departments.find((department) => department.id === departmentId);
+
+        setDivisions((prev) =>
+          prev.map((division) =>
+            division.id === editingDivisionId
+              ? {
+                  ...division,
+                  name,
+                  factoryId,
+                  factoryName: selectedFactory?.name || division.factoryName,
+                  departmentId,
+                  departmentName: selectedDepartment?.name || division.departmentName,
+                }
+              : division
+          )
+        );
+
+        setUsers((prev) =>
+          prev.map((user) =>
+            user.divisionId === editingDivisionId
+              ? {
+                  ...user,
+                  divisionName: name,
+                }
+              : user
+          )
+        );
+
+        handleCloseDivisionModal();
+      } else {
+        await postJSON("/api/user-management/divisions", { factoryId, departmentId, name });
+        await loadDivisions();
+        handleCloseDivisionModal();
+      }
     } catch (error) {
-      console.error("เพิ่มฝ่ายไม่สำเร็จ", error);
-      setDivisionFormError(error?.message || "ไม่สามารถเพิ่มฝ่ายได้");
+      console.error(isEditing ? "แก้ไขฝ่ายไม่สำเร็จ (frontend)" : "เพิ่มฝ่ายไม่สำเร็จ", error);
+      setDivisionFormError(
+        error?.message || (isEditing ? "ไม่สามารถแก้ไขฝ่ายได้" : "ไม่สามารถเพิ่มฝ่ายได้")
+      );
     } finally {
       setIsSubmittingDivision(false);
     }
@@ -658,7 +908,11 @@ export default function UserManagementClient() {
                       <td style={styles.tableCell}>{user.divisionName || "-"}</td>
                       <td style={{ ...styles.tableCell, textAlign: "center" }}>
                         <div style={{ ...styles.actionGroup, width: "100%", justifyContent: "center" }}>
-                          <button type="button" style={styles.actionButton("primary")}>
+                          <button
+                            type="button"
+                            style={styles.actionButton("primary")}
+                            onClick={() => handleOpenEditUserModal(user)}
+                          >
                             <FaPenToSquare size={14} /> แก้ไข
                           </button>
                           <button type="button" style={styles.actionButton("danger")}>
@@ -721,7 +975,11 @@ export default function UserManagementClient() {
                     </td>
                     <td style={{ ...styles.tableCell, textAlign: "center" }}>
                       <div style={{ ...styles.actionGroup, width: "100%", justifyContent: "center" }}>
-                        <button type="button" style={styles.actionButton("primary")}>
+                        <button
+                          type="button"
+                          style={styles.actionButton("primary")}
+                          onClick={() => handleOpenEditFactoryModal(factory)}
+                        >
                           <FaPenToSquare size={14} /> แก้ไข
                         </button>
                         <button type="button" style={styles.actionButton("danger")}>
@@ -791,7 +1049,11 @@ export default function UserManagementClient() {
                     <td style={styles.tableCell}>{department.factoryName || factories.find((f) => f.id === department.factoryId)?.name || "-"}</td>
                     <td style={{ ...styles.tableCell, textAlign: "center" }}>
                       <div style={{ ...styles.actionGroup, width: "100%", justifyContent: "center" }}>
-                        <button type="button" style={styles.actionButton("primary")}>
+                        <button
+                          type="button"
+                          style={styles.actionButton("primary")}
+                          onClick={() => handleOpenEditDepartmentModal(department)}
+                        >
                           <FaPenToSquare size={14} /> แก้ไข
                         </button>
                         <button type="button" style={styles.actionButton("danger")}>
@@ -871,7 +1133,11 @@ export default function UserManagementClient() {
                     </td>
                     <td style={{ ...styles.tableCell, textAlign: "center" }}>
                       <div style={{ ...styles.actionGroup, width: "100%", justifyContent: "center" }}>
-                        <button type="button" style={styles.actionButton("primary")}>
+                        <button
+                          type="button"
+                          style={styles.actionButton("primary")}
+                          onClick={() => handleOpenEditDivisionModal(division)}
+                        >
                           <FaPenToSquare size={14} /> แก้ไข
                         </button>
                         <button type="button" style={styles.actionButton("danger")}>
@@ -987,19 +1253,21 @@ export default function UserManagementClient() {
         </section>
       </div>
 
-      {isAddUserModalOpen && (
-        <div style={styles.modalOverlay} onClick={handleCloseAddUserModal}>
+      {isUserModalOpen && (
+        <div style={styles.modalOverlay} onClick={handleCloseUserModal}>
           <form
             style={styles.modalContent}
             onClick={(event) => event.stopPropagation()}
-            onSubmit={handleSubmitAddUser}
+            onSubmit={handleSubmitUser}
           >
             <header style={styles.modalHeader}>
-              <span style={styles.modalTitle}>เพิ่มผู้ใช้</span>
+              <span style={styles.modalTitle}>
+                {userModalMode === "edit" ? "แก้ไขผู้ใช้" : "เพิ่มผู้ใช้"}
+              </span>
               <button
                 type="button"
                 style={styles.modalClose}
-                onClick={handleCloseAddUserModal}
+                onClick={handleCloseUserModal}
                 aria-label="ปิดหน้าต่าง"
               >
                 ×
@@ -1031,8 +1299,14 @@ export default function UserManagementClient() {
                   style={styles.input}
                   value={userForm.password}
                   onChange={handleInputChange("password")}
-                  required
+                  required={userModalMode === "create"}
+                  placeholder={
+                    userModalMode === "edit" ? "เว้นว่างหากไม่ต้องการเปลี่ยนรหัสผ่าน" : undefined
+                  }
                 />
+                {userModalMode === "edit" && (
+                  <p style={styles.helperText}>หากไม่ต้องการเปลี่ยนรหัสผ่าน ให้เว้นว่างไว้</p>
+                )}
               </div>
 
               <div style={styles.fieldGroup}>
@@ -1139,7 +1413,7 @@ export default function UserManagementClient() {
               <button
                 type="button"
                 style={styles.actionButton("ghost")}
-                onClick={handleCloseAddUserModal}
+                onClick={handleCloseUserModal}
               >
                 ยกเลิก
               </button>
@@ -1152,14 +1426,18 @@ export default function UserManagementClient() {
                 }}
                 disabled={isSubmittingUser}
               >
-                {isSubmittingUser ? "กำลังบันทึก..." : "บันทึก"}
+                {isSubmittingUser
+                  ? "กำลังบันทึก..."
+                  : userModalMode === "edit"
+                    ? "บันทึกการแก้ไข"
+                    : "บันทึก"}
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {isAddFactoryModalOpen && (
+      {isFactoryModalOpen && (
         <div style={styles.modalOverlay} onClick={handleCloseFactoryModal}>
           <form
             style={styles.modalContent}
@@ -1167,7 +1445,9 @@ export default function UserManagementClient() {
             onSubmit={handleSubmitFactory}
           >
             <header style={styles.modalHeader}>
-              <span style={styles.modalTitle}>เพิ่มโรงงาน</span>
+              <span style={styles.modalTitle}>
+                {factoryModalMode === "edit" ? "แก้ไขโรงงาน" : "เพิ่มโรงงาน"}
+              </span>
               <button
                 type="button"
                 style={styles.modalClose}
@@ -1188,7 +1468,9 @@ export default function UserManagementClient() {
                   type="text"
                   style={styles.input}
                   value={factoryForm.name}
-                  onChange={(event) => setFactoryForm({ name: event.target.value })}
+                  onChange={(event) =>
+                    setFactoryForm((prev) => ({ ...prev, name: event.target.value }))
+                  }
                   required
                 />
               </div>
@@ -1213,14 +1495,18 @@ export default function UserManagementClient() {
                 }}
                 disabled={isSubmittingFactory}
               >
-                {isSubmittingFactory ? "กำลังบันทึก..." : "บันทึก"}
+                {isSubmittingFactory
+                  ? "กำลังบันทึก..."
+                  : factoryModalMode === "edit"
+                    ? "บันทึกการแก้ไข"
+                    : "บันทึก"}
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {isAddDepartmentModalOpen && (
+      {isDepartmentModalOpen && (
         <div style={styles.modalOverlay} onClick={handleCloseDepartmentModal}>
           <form
             style={styles.modalContent}
@@ -1228,7 +1514,9 @@ export default function UserManagementClient() {
             onSubmit={handleSubmitDepartment}
           >
             <header style={styles.modalHeader}>
-              <span style={styles.modalTitle}>เพิ่มแผนก</span>
+              <span style={styles.modalTitle}>
+                {departmentModalMode === "edit" ? "แก้ไขแผนก" : "เพิ่มแผนก"}
+              </span>
               <button
                 type="button"
                 style={styles.modalClose}
@@ -1300,14 +1588,18 @@ export default function UserManagementClient() {
                 }}
                 disabled={isSubmittingDepartment}
               >
-                {isSubmittingDepartment ? "กำลังบันทึก..." : "บันทึก"}
+                {isSubmittingDepartment
+                  ? "กำลังบันทึก..."
+                  : departmentModalMode === "edit"
+                    ? "บันทึกการแก้ไข"
+                    : "บันทึก"}
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {isAddDivisionModalOpen && (
+      {isDivisionModalOpen && (
         <div style={styles.modalOverlay} onClick={handleCloseDivisionModal}>
           <form
             style={styles.modalContent}
@@ -1315,7 +1607,9 @@ export default function UserManagementClient() {
             onSubmit={handleSubmitDivision}
           >
             <header style={styles.modalHeader}>
-              <span style={styles.modalTitle}>เพิ่มฝ่าย</span>
+              <span style={styles.modalTitle}>
+                {divisionModalMode === "edit" ? "แก้ไขฝ่าย" : "เพิ่มฝ่าย"}
+              </span>
               <button
                 type="button"
                 style={styles.modalClose}
@@ -1412,7 +1706,11 @@ export default function UserManagementClient() {
                 }}
                 disabled={isSubmittingDivision}
               >
-                {isSubmittingDivision ? "กำลังบันทึก..." : "บันทึก"}
+                {isSubmittingDivision
+                  ? "กำลังบันทึก..."
+                  : divisionModalMode === "edit"
+                    ? "บันทึกการแก้ไข"
+                    : "บันทึก"}
               </button>
             </div>
           </form>
