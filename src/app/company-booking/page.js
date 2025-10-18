@@ -12,6 +12,7 @@ import {
   FaChevronRight,
 } from "react-icons/fa6";
 import { FaArrowLeft } from "react-icons/fa";
+import CargoAttachmentsInput from "@/components/CargoAttachmentsInput";
 
 const colors = {
   primary: "#0c4aa1",
@@ -401,6 +402,7 @@ export default function CompanyBookingPage() {
     division: "",
     department: "",
   });
+  const [cargoFiles, setCargoFiles] = useState([]);
 
   useEffect(() => {
     try {
@@ -832,11 +834,12 @@ export default function CompanyBookingPage() {
               <LabeledField label="ระบุรายละเอียด" required>
                 <textarea style={styles.textarea} placeholder="ระบุรายละเอียด เช่น ประเภทของสิ่งของ ขนาดหรือน้ำหนัก จุดโหลด/สิ่งที่ควรระวัง"></textarea>
               </LabeledField>
-              <div style={styles.fileUpload}>
-                <span style={{ fontWeight: "700", color: colors.textDark }}>ยืนยันรถที่ใช้</span>
-                <button type="button" style={styles.fileButton}>Choose Files</button>
-                <span style={{ color: colors.textLight, fontSize: "14px" }}>No file chosen</span>
-              </div>
+              <CargoAttachmentsInput
+                files={cargoFiles}
+                onChange={setCargoFiles}
+                buttonStyle={styles.fileButton}
+                helperStyle={{ color: colors.textLight, fontSize: "14px" }}
+              />
             </section>
 
             <section
