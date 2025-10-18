@@ -188,28 +188,6 @@ const styles = {
     outline: "none",
     boxSizing: "border-box",
   },
-  departmentRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-  },
-  inlineAddButton: {
-    alignSelf: "flex-start",
-    background: "none",
-    border: "none",
-    color: "#0c4aa1",
-    fontWeight: "700",
-    cursor: "pointer",
-    fontSize: "14px",
-  },
-  inlineRemoveButton: {
-    background: "none",
-    border: "none",
-    color: "#d64545",
-    fontWeight: "700",
-    cursor: "pointer",
-    fontSize: "13px",
-  },
   modalActions: {
     display: "flex",
     justifyContent: "flex-end",
@@ -264,9 +242,10 @@ const vehicles = [
 const createInitialUserForm = () => ({
   username: "",
   password: "",
+  factory: "",
+  department: "",
   division: "",
   role: "",
-  departments: [""],
 });
 
 export default function UserManagementClient() {
@@ -289,32 +268,6 @@ export default function UserManagementClient() {
   const handleInputChange = (field) => (event) => {
     const { value } = event.target;
     setUserForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleDepartmentChange = (index, value) => {
-    setUserForm((prev) => {
-      const nextDepartments = [...prev.departments];
-      nextDepartments[index] = value;
-      return { ...prev, departments: nextDepartments };
-    });
-  };
-
-  const handleAddDepartmentField = () => {
-    setUserForm((prev) => ({
-      ...prev,
-      departments: [...prev.departments, ""],
-    }));
-  };
-
-  const handleRemoveDepartmentField = (index) => {
-    setUserForm((prev) => {
-      if (prev.departments.length === 1) {
-        return prev;
-      }
-
-      const nextDepartments = prev.departments.filter((_, idx) => idx !== index);
-      return { ...prev, departments: nextDepartments.length ? nextDepartments : [""] };
-    });
   };
 
   const handleSubmitAddUser = (event) => {
@@ -660,6 +613,50 @@ export default function UserManagementClient() {
               </div>
 
               <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel} htmlFor="user-factory">
+                  โรงงาน
+                </label>
+                <select
+                  id="user-factory"
+                  style={styles.select}
+                  value={userForm.factory}
+                  onChange={handleInputChange("factory")}
+                  required
+                >
+                  <option value="" disabled>
+                    เลือกโรงงาน
+                  </option>
+                  {factories.map((factory) => (
+                    <option key={factory.id} value={factory.id}>
+                      {factory.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel} htmlFor="user-department">
+                  แผนก
+                </label>
+                <select
+                  id="user-department"
+                  style={styles.select}
+                  value={userForm.department}
+                  onChange={handleInputChange("department")}
+                  required
+                >
+                  <option value="" disabled>
+                    เลือกแผนก
+                  </option>
+                  {departments.map((department) => (
+                    <option key={department.id} value={department.id}>
+                      {department.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={styles.fieldGroup}>
                 <label style={styles.fieldLabel} htmlFor="user-division">
                   ฝ่าย
                 </label>
@@ -698,48 +695,6 @@ export default function UserManagementClient() {
                   <option value="user">ผู้ใช้ทั่วไป</option>
                   <option value="vendor">ผู้ให้บริการ (Vendor)</option>
                 </select>
-              </div>
-
-              <div style={styles.fieldGroup}>
-                <span style={styles.fieldLabel}>แผนก</span>
-                {userForm.departments.map((departmentValue, index) => (
-                  <div key={`department-${index}`} style={styles.departmentRow}>
-                    <select
-                      style={styles.select}
-                      value={departmentValue}
-                      onChange={(event) =>
-                        handleDepartmentChange(index, event.target.value)
-                      }
-                      required={index === 0}
-                    >
-                      <option value="" disabled>
-                        เลือกแผนก
-                      </option>
-                      {departments.map((department) => (
-                        <option key={department.id} value={department.id}>
-                          {department.name}
-                        </option>
-                      ))}
-                    </select>
-                    {userForm.departments.length > 1 && (
-                      <button
-                        type="button"
-                        style={styles.inlineRemoveButton}
-                        onClick={() => handleRemoveDepartmentField(index)}
-                        aria-label="ลบแผนก"
-                      >
-                        ลบ
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  style={styles.inlineAddButton}
-                  onClick={handleAddDepartmentField}
-                >
-                  + เพิ่มแผนก
-                </button>
               </div>
             </div>
 
