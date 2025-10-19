@@ -550,6 +550,18 @@ function toTimeInputValue(value) {
   return str.slice(0, 5);
 }
 
+function formatVehicleOption(vehicle) {
+  if (!vehicle || typeof vehicle !== "object") {
+    return "";
+  }
+  const registration = vehicle.registration ? String(vehicle.registration).trim() : "";
+  const name = vehicle.name ? String(vehicle.name).trim() : "";
+  if (registration && name) {
+    return `${registration} - ${name}`;
+  }
+  return registration || name || `รถ ${vehicle.id}`;
+}
+
 function LabeledField({ label, required = false, children }) {
   return (
     <label style={{ display: "flex", flexDirection: "column" }}>
@@ -600,6 +612,11 @@ export default function CompanyBookingPage() {
   const [showBookingPicker, setShowBookingPicker] = useState(false);
   const [selectedBookingId, setSelectedBookingId] = useState(null);
   const [isLoadingBookingDetail, setIsLoadingBookingDetail] = useState(false);
+  const [vehicleOptions, setVehicleOptions] = useState([]);
+  const [vehicleOptionsError, setVehicleOptionsError] = useState("");
+  const [isLoadingVehicles, setIsLoadingVehicles] = useState(false);
+  const [gaVehicleId, setGaVehicleId] = useState("");
+  const [gaVehicleType, setGaVehicleType] = useState("");
   const formRef = useRef(null);
   const bookingPickerRef = useRef(null);
 
@@ -722,10 +739,52 @@ export default function CompanyBookingPage() {
     return departments.filter((department) => Number(department.divisionId) === selectedDivisionId);
   }, [departments, requesterOrgForm.division]);
 
+  const vehicleTypeOptions = useMemo(() => {
+    const types = new Set();
+    for (const vehicle of vehicleOptions) {
+      if (vehicle?.vehicleType) {
+        types.add(String(vehicle.vehicleType));
+      }
+    }
+    return Array.from(types);
+  }, [vehicleOptions]);
+
+  const vehicleTypeOptionsWithCurrent = useMemo(() => {
+    if (!gaVehicleType) {
+      return vehicleTypeOptions;
+    }
+    if (vehicleTypeOptions.some((type) => type === gaVehicleType)) {
+      return vehicleTypeOptions;
+    }
+    return [gaVehicleType, ...vehicleTypeOptions];
+  }, [gaVehicleType, vehicleTypeOptions]);
+
   const normalizedRole = normalizeRole(userRole);
   const visibleMenuItems = useMemo(() => getMenuItemsForRole(normalizedRole), [normalizedRole]);
   const roleLabel = ROLE_LABELS[normalizedRole] || normalizedRole;
   const isAdmin = normalizedRole === "admin";
+
+  const loadVehicleOptions = useCallback(async () => {
+    if (!isAdmin) {
+      return;
+    }
+    setIsLoadingVehicles(true);
+    setVehicleOptionsError("");
+    try {
+      const response = await fetchJSON("/api/company-assets/vehicles");
+      const vehicles = Array.isArray(response?.vehicles) ? response.vehicles : [];
+      setVehicleOptions(vehicles);
+      if (!vehicles.length) {
+        setVehicleOptionsError("ไม่พบข้อมูลรถบริษัท");
+      }
+    } catch (error) {
+      console.error("โหลดข้อมูลรถบริษัทไม่สำเร็จ", error);
+      setVehicleOptions([]);
+      setVehicleOptionsError("ไม่สามารถโหลดข้อมูลรถบริษัทได้");
+    } finally {
+      setIsLoadingVehicles(false);
+    }
+  }, [isAdmin]);
 
   const loadPendingBookings = useCallback(async () => {
     if (!isAdmin) {
@@ -757,6 +816,37 @@ export default function CompanyBookingPage() {
       setPendingBookingsError("");
     }
   }, [isAdmin, loadPendingBookings]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      loadVehicleOptions();
+    } else {
+      setVehicleOptions([]);
+      setVehicleOptionsError("");
+      setGaVehicleId("");
+      setGaVehicleType("");
+    }
+  }, [isAdmin, loadVehicleOptions]);
+
+  useEffect(() => {
+    if (!gaVehicleId || gaVehicleType) {
+      return;
+    }
+    const matchedVehicle = vehicleOptions.find((vehicle) => String(vehicle.id) === gaVehicleId);
+    if (matchedVehicle?.vehicleType) {
+      setGaVehicleType(String(matchedVehicle.vehicleType));
+    }
+  }, [gaVehicleId, gaVehicleType, vehicleOptions]);
+
+  useEffect(() => {
+    if (!gaVehicleId) {
+      return;
+    }
+    const exists = vehicleOptions.some((vehicle) => String(vehicle.id) === gaVehicleId);
+    if (!exists) {
+      setGaVehicleId("");
+    }
+  }, [gaVehicleId, vehicleOptions]);
 
   useEffect(() => {
     if (!isAdmin || !showBookingPicker) {
@@ -945,6 +1035,8 @@ export default function CompanyBookingPage() {
       division: booking.divisionId ? String(booking.divisionId) : "",
       department: booking.departmentId ? String(booking.departmentId) : "",
     });
+    setGaVehicleId("");
+    setGaVehicleType("");
     setIsLoadingBookingDetail(true);
     setPendingBookingsError("");
     try {
@@ -1006,6 +1098,17 @@ export default function CompanyBookingPage() {
         setAdditionalEmails(detailData.additionalEmails);
       } else {
         setAdditionalEmails([""]);
+      }
+
+      const detailVehicleId = detailData.gaVehicleId ? String(detailData.gaVehicleId) : "";
+      setGaVehicleId(detailVehicleId);
+      if (detailData.gaVehicleType) {
+        setGaVehicleType(String(detailData.gaVehicleType));
+      } else if (detailVehicleId) {
+        const matchedVehicle = vehicleOptions.find((vehicle) => String(vehicle.id) === detailVehicleId);
+        setGaVehicleType(matchedVehicle?.vehicleType ? String(matchedVehicle.vehicleType) : "");
+      } else {
+        setGaVehicleType("");
       }
     } catch (error) {
       console.error("โหลดรายละเอียดการจองไม่สำเร็จ", error);
@@ -1683,17 +1786,50 @@ export default function CompanyBookingPage() {
                   <input style={styles.input} disabled={!isAdmin} required />
                 </LabeledField>
                 <LabeledField label="ยืนยันรถที่ใช้" required>
-                  <select style={styles.input} disabled={!isAdmin} required>
-                    <option>เลือกรถ</option>
-                    <option>5ก-5902</option>
-                    <option>7ก-2087</option>
+                  <select
+                    style={styles.input}
+                    name="gaVehicleId"
+                    value={gaVehicleId}
+                    onChange={(event) => {
+                      const selectedId = event.target.value;
+                      setGaVehicleId(selectedId);
+                      if (!selectedId) {
+                        setGaVehicleType("");
+                        return;
+                      }
+                      const matchedVehicle = vehicleOptions.find((vehicle) => String(vehicle.id) === selectedId);
+                      if (matchedVehicle?.vehicleType) {
+                        setGaVehicleType(String(matchedVehicle.vehicleType));
+                      }
+                    }}
+                    disabled={!isAdmin || isLoadingVehicles}
+                    required
+                  >
+                    <option value="">
+                      {isLoadingVehicles ? "กำลังโหลดข้อมูล..." : "เลือกรถ"}
+                    </option>
+                    {vehicleOptions.map((vehicle) => (
+                      <option key={vehicle.id} value={String(vehicle.id)}>
+                        {formatVehicleOption(vehicle)}
+                      </option>
+                    ))}
                   </select>
                 </LabeledField>
                 <LabeledField label="ประเภทรถ" required>
-                  <select style={styles.input} disabled={!isAdmin} required>
-                    <option>ระบุ</option>
-                    <option>รถเก๋ง</option>
-                    <option>รถตู้</option>
+                  <select
+                    style={styles.input}
+                    name="gaVehicleType"
+                    value={gaVehicleType}
+                    onChange={(event) => setGaVehicleType(event.target.value)}
+                    disabled={!isAdmin || (!vehicleTypeOptionsWithCurrent.length && !gaVehicleType)}
+                    required
+                  >
+                    <option value="">ระบุ</option>
+                    {vehicleTypeOptionsWithCurrent.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
                   </select>
                 </LabeledField>
                 <LabeledField label="สถานะการจอง" required>
@@ -1707,6 +1843,9 @@ export default function CompanyBookingPage() {
                   <input style={styles.input} disabled={!isAdmin} required />
                 </LabeledField>
               </div>
+              {isAdmin && vehicleOptionsError ? (
+                <p style={styles.errorText}>{vehicleOptionsError}</p>
+              ) : null}
             </section>
             <div style={styles.formFooter}>
               {formError ? <p style={styles.errorText}>{formError}</p> : null}
