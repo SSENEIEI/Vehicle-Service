@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { DEFAULT_ROLE, ROLE_LABELS, getMenuItemsForRole, normalizeRole } from "@/lib/menuItems";
 import { fetchJSON } from "@/lib/http";
@@ -216,6 +216,14 @@ const styles = {
     marginTop: "8px",
     width: "100%",
   },
+  formFooter: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-end",
+    width: "100%",
+    marginTop: "16px",
+    gap: "8px",
+  },
   actionButton: (variant = "primary") => ({
     minWidth: "180px",
     padding: "16px",
@@ -368,6 +376,70 @@ const styles = {
     opacity: 0.6,
     pointerEvents: "none",
   },
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "24px",
+    backgroundColor: "rgba(15, 39, 79, 0.45)",
+    zIndex: 9999,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: "520px",
+    backgroundColor: "#ffffff",
+    borderRadius: "22px",
+    padding: "28px 32px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "18px",
+    boxShadow: "0 24px 48px rgba(11, 61, 128, 0.28)",
+  },
+  modalTitle: {
+    margin: 0,
+    fontSize: "20px",
+    fontWeight: "800",
+    color: colors.primary,
+  },
+  modalLabel: {
+    margin: 0,
+    fontSize: "15px",
+    fontWeight: "700",
+    color: colors.textDark,
+  },
+  modalEmailValue: {
+    margin: 0,
+    fontSize: "15px",
+    fontWeight: "600",
+    color: colors.primary,
+    backgroundColor: colors.accent,
+    borderRadius: "16px",
+    border: `1.5px solid ${colors.border}`,
+    padding: "12px 16px",
+  },
+  modalExtraSection: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+  },
+  modalAddButton: {
+    alignSelf: "flex-start",
+    padding: "10px 16px",
+    borderRadius: "14px",
+    border: `1.5px solid ${colors.primary}`,
+    backgroundColor: "#ffffff",
+    color: colors.primary,
+    fontSize: "15px",
+    fontWeight: "700",
+    cursor: "pointer",
+  },
+  modalActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "14px",
+  },
 };
 
   function LabeledField({ label, required = false, children }) {
@@ -402,7 +474,12 @@ const styles = {
       division: "",
       department: "",
     });
-    const [cargoFiles, setCargoFiles] = useState([]);
+  const [cargoFiles, setCargoFiles] = useState([]);
+  const [contactEmail, setContactEmail] = useState("");
+  const [additionalEmails, setAdditionalEmails] = useState([""]);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [formError, setFormError] = useState("");
+  const formRef = useRef(null);
 
     useEffect(() => {
       try {
@@ -430,6 +507,14 @@ const styles = {
               parsedProfile?.factory ||
               "",
           });
+          const emailCandidate =
+            parsedProfile?.email ||
+            parsedProfile?.contactEmail ||
+            parsedProfile?.workEmail ||
+            "";
+          if (emailCandidate) {
+            setContactEmail(emailCandidate);
+          }
         }
       } catch (error) {
         console.warn("Failed to restore stored session", error);
@@ -547,8 +632,54 @@ const styles = {
       }));
     };
 
+    const handleContactEmailChange = (event) => {
+      const { value } = event.target;
+      setContactEmail(value);
+      if (formError) {
+        setFormError("");
+      }
+    };
+
+    const handleSubmit = (event) => {
+      event.preventDefault();
+      if (!formRef.current) {
+        return;
+      }
+      if (!formRef.current.checkValidity()) {
+        setFormError("กรุณากรอกข้อมูลให้ครบถ้วนในช่องที่มี *");
+        formRef.current.reportValidity();
+        return;
+      }
+      setFormError("");
+      if (additionalEmails.length === 0) {
+        setAdditionalEmails([""]);
+      }
+      setIsConfirmModalOpen(true);
+    };
+
+    const handleCloseConfirmModal = () => {
+      setIsConfirmModalOpen(false);
+    };
+
+    const handleAdditionalEmailChange = (index, value) => {
+      setAdditionalEmails((prev) =>
+        prev.map((email, idx) => (idx === index ? value : email))
+      );
+    };
+
+    const handleAddAdditionalEmail = () => {
+      setAdditionalEmails((prev) => [...prev, ""]);
+    };
+
+    const handleConfirmBooking = () => {
+      // TODO: เชื่อมต่อ backend เพื่อส่งข้อมูลการจองพร้อมอีเมล
+      setFormError("");
+      setIsConfirmModalOpen(false);
+    };
+
     return (
-      <main style={styles.page}>
+      <>
+        <main style={styles.page}>
         <aside style={styles.sidebar}>
           <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
             <button
@@ -608,7 +739,7 @@ const styles = {
           </header>
 
           <div style={styles.body}>
-            <div style={styles.mainForm}>
+            <form ref={formRef} style={styles.mainForm} onSubmit={handleSubmit}>
               <section style={styles.sectionCard}>
                 <div style={styles.sectionHeader}>
                   <FaKey size={20} /> ข้อมูลผู้จองรถเช่า
@@ -619,10 +750,10 @@ const styles = {
                 {orgOptionsError ? <p style={styles.errorText}>{orgOptionsError}</p> : null}
                 <div style={styles.formGrid(3)}>
                   <LabeledField label="รหัสพนักงานผู้จอง" required>
-                    <input style={styles.input} />
+                    <input style={styles.input} required />
                   </LabeledField>
                   <LabeledField label="ชื่อผู้จอง" required>
-                    <input style={styles.input} />
+                    <input style={styles.input} required />
                   </LabeledField>
                   <LabeledField label="โรงงาน" required>
                     <select
@@ -630,6 +761,7 @@ const styles = {
                       value={requesterOrgForm.factory}
                       onChange={handleFactoryChange}
                       disabled={isLoadingOrgOptions && factories.length === 0}
+                      required
                     >
                       <option value="" disabled>
                         {isLoadingOrgOptions ? "กำลังโหลด..." : "เลือกโรงงาน"}
@@ -650,6 +782,7 @@ const styles = {
                       value={requesterOrgForm.division}
                       onChange={handleDivisionChange}
                       disabled={!requesterOrgForm.factory || isLoadingOrgOptions}
+                      required
                     >
                       <option value="" disabled>
                         {!requesterOrgForm.factory
@@ -674,6 +807,7 @@ const styles = {
                       value={requesterOrgForm.department}
                       onChange={handleDepartmentChange}
                       disabled={!requesterOrgForm.division || isLoadingOrgOptions}
+                      required
                     >
                       <option value="" disabled>
                         {!requesterOrgForm.division
@@ -693,10 +827,19 @@ const styles = {
                     ) : null}
                   </LabeledField>
                   <LabeledField label="เบอร์ติดต่อกลับ" required>
-                    <input style={styles.input} />
+                    <input style={styles.input} required />
                   </LabeledField>
                   <LabeledField label="E-mail ติดต่อกลับ" required>
-                    <input style={styles.input} />
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <input
+                        style={styles.input}
+                        type="email"
+                        value={contactEmail}
+                        onChange={handleContactEmailChange}
+                        placeholder="name@example.com"
+                        required
+                      />
+                    </div>
                   </LabeledField>
                 </div>
               </section>
@@ -725,13 +868,24 @@ const styles = {
                     </div>
                     <div style={styles.pointGridThree}>
                       <LabeledField label="วันรถออก" required>
-                        <input style={styles.input} type="text" defaultValue="02/10/2025" />
+                        <input
+                          style={styles.input}
+                          type="text"
+                          defaultValue="02/10/2025"
+                          required
+                        />
                       </LabeledField>
                       <LabeledField label="เวลารถออก" required>
-                        <input style={styles.input} type="time" />
+                        <input style={styles.input} type="time" required />
                       </LabeledField>
                       <LabeledField label="จำนวนผู้โดยสารขึ้นจุดนี้" required>
-                        <input style={styles.input} type="number" min="1" defaultValue="1" />
+                        <input
+                          style={styles.input}
+                          type="number"
+                          min="1"
+                          defaultValue="1"
+                          required
+                        />
                       </LabeledField>
                     </div>
                     <div style={styles.pointGridOne}>
@@ -741,13 +895,13 @@ const styles = {
                     </div>
                     <div style={styles.pointGridThree}>
                       <LabeledField label="สถานที่รับ" required>
-                        <input style={styles.input} placeholder="" />
+                        <input style={styles.input} placeholder="" required />
                       </LabeledField>
                       <LabeledField label="อำเภอ" required>
-                        <input style={styles.input} placeholder="" />
+                        <input style={styles.input} placeholder="" required />
                       </LabeledField>
                       <LabeledField label="จังหวัด" required>
-                        <input style={styles.input} placeholder="" />
+                        <input style={styles.input} placeholder="" required />
                       </LabeledField>
                     </div>
                     <p style={styles.subSectionLabel}>เดินทางโดยเครื่องบิน (จุดต้นทาง)</p>
@@ -784,10 +938,16 @@ const styles = {
                         </div>
                         <div style={styles.pointGridThree}>
                           <LabeledField label="เวลาถึงปลายทาง" required>
-                            <input style={styles.input} type="time" />
+                            <input style={styles.input} type="time" required />
                           </LabeledField>
                           <LabeledField label="จำนวนผู้โดยสารขึ้นจุดนี้" required>
-                            <input style={styles.input} type="number" min="1" defaultValue="1" />
+                            <input
+                              style={styles.input}
+                              type="number"
+                              min="1"
+                              defaultValue="1"
+                              required
+                            />
                           </LabeledField>
                         </div>
                         <div style={styles.pointGridOne}>
@@ -797,13 +957,13 @@ const styles = {
                         </div>
                         <div style={styles.pointGridThree}>
                           <LabeledField label="สถานที่รับ" required>
-                            <input style={styles.input} placeholder="" />
+                            <input style={styles.input} placeholder="" required />
                           </LabeledField>
                           <LabeledField label="อำเภอ" required>
-                            <input style={styles.input} placeholder="" />
+                            <input style={styles.input} placeholder="" required />
                           </LabeledField>
                           <LabeledField label="จังหวัด" required>
-                            <input style={styles.input} placeholder="" />
+                            <input style={styles.input} placeholder="" required />
                           </LabeledField>
                         </div>
                         <p style={styles.subSectionLabel}>เดินทางโดยเครื่องบิน (จุดปลายทาง)</p>
@@ -835,6 +995,7 @@ const styles = {
                   <textarea
                     style={styles.textarea}
                     placeholder="ระบุรายละเอียด เช่น ประเภทของสิ่งของ ขนาดหรือน้ำหนัก จุดโหลด/สิ่งที่ควรระวัง"
+                    required
                   ></textarea>
                 </LabeledField>
                 <CargoAttachmentsInput
@@ -846,10 +1007,10 @@ const styles = {
               </section>
 
               <section
-              style={{
-                ...styles.sectionCard,
-                ...(isAdmin ? {} : styles.disabledCard),
-              }}
+                style={{
+                  ...styles.sectionCard,
+                  ...(isAdmin ? {} : styles.disabledCard),
+                }}
               >
                 <div style={styles.sectionHeader}>
                   <FaUsers size={20} /> สำหรับพนักงาน GA Service
@@ -859,49 +1020,107 @@ const styles = {
                 </p>
                 <div style={styles.formGrid(3)}>
                   <LabeledField label="ยืนยันพนักงานขับรถ" required>
-                    <input style={styles.input} disabled={!isAdmin} />
+                    <input style={styles.input} disabled={!isAdmin} required />
                   </LabeledField>
                   <LabeledField label="เบอร์โทรพนักงานขับรถ" required>
-                    <input style={styles.input} disabled={!isAdmin} />
+                    <input style={styles.input} disabled={!isAdmin} required />
                   </LabeledField>
                   <LabeledField label="ยืนยันรถที่ใช้" required>
-                    <select style={styles.input} disabled={!isAdmin}>
+                    <select style={styles.input} disabled={!isAdmin} required>
                       <option>เลือกรถ</option>
                       <option>5ก-5902</option>
                       <option>7ก-2087</option>
                     </select>
                   </LabeledField>
                   <LabeledField label="ประเภทรถ" required>
-                    <select style={styles.input} disabled={!isAdmin}>
+                    <select style={styles.input} disabled={!isAdmin} required>
                       <option>ระบุ</option>
                       <option>รถเก๋ง</option>
                       <option>รถตู้</option>
                     </select>
                   </LabeledField>
                   <LabeledField label="สถานะการจอง" required>
-                    <select style={styles.input} disabled={!isAdmin}>
+                    <select style={styles.input} disabled={!isAdmin} required>
                       <option>ระบุ</option>
                       <option>อนุมัติ</option>
                       <option>ไม่อนุมัติ</option>
                     </select>
                   </LabeledField>
                   <LabeledField label="เหตุผลการไม่อนุมัติ" required>
-                    <input style={styles.input} disabled={!isAdmin} />
+                    <input style={styles.input} disabled={!isAdmin} required />
                   </LabeledField>
                 </div>
               </section>
-            </div>
-
-            <div style={styles.asideActions}>
-              <button type="button" style={styles.actionButton("outline")}>
-                ยกเลิกการจอง
-              </button>
-              <button type="button" style={styles.actionButton("dark")}>
-                บันทึกการจอง
-              </button>
-            </div>
+              <div style={styles.formFooter}>
+                {formError ? <p style={styles.errorText}>{formError}</p> : null}
+                <div style={styles.asideActions}>
+                  <button type="button" style={styles.actionButton("outline")}>
+                    ยกเลิกการจอง
+                  </button>
+                  <button type="submit" style={styles.actionButton("dark")}>
+                    บันทึกการจอง
+                  </button>
+                </div>
+              </div>
+            </form>
           </div>
         </section>
       </main>
+      {isConfirmModalOpen ? (
+        <div style={styles.modalOverlay} onClick={handleCloseConfirmModal}>
+          <div
+            style={styles.modalCard}
+            onClick={(event) => event.stopPropagation()}
+          >
+              <h3 style={styles.modalTitle}>ตรวจสอบอีเมลสำหรับการติดต่อกลับ</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <span style={styles.modalLabel}>E-mail ติดต่อกลับ :</span>
+                <p style={styles.modalEmailValue}>{contactEmail}</p>
+              </div>
+              <div style={styles.modalExtraSection}>
+                <span style={styles.modalLabel}>E-mail ติดต่อกลับเพิ่มเติม</span>
+                {additionalEmails.map((email, index) => (
+                  <input
+                    key={`additional-email-${index}`}
+                    style={styles.input}
+                    type="email"
+                    value={email}
+                    placeholder="ระบุ E-mail เพิ่มเติม"
+                    onChange={(event) =>
+                      handleAdditionalEmailChange(index, event.target.value)
+                    }
+                  />
+                ))}
+                <button
+                  type="button"
+                  style={styles.modalAddButton}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleAddAdditionalEmail();
+                  }}
+                >
+                  + E-mail ติดต่อกลับ
+                </button>
+              </div>
+              <div style={styles.modalActions}>
+                <button
+                  type="button"
+                  style={styles.actionButton("outline")}
+                  onClick={handleCloseConfirmModal}
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  style={styles.actionButton("dark")}
+                  onClick={handleConfirmBooking}
+                >
+                  ยืนยันการจอง
+                </button>
+              </div>
+          </div>
+        </div>
+        ) : null}
+      </>
     );
   }

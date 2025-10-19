@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { DEFAULT_ROLE, ROLE_LABELS, getMenuItemsForRole, normalizeRole } from "@/lib/menuItems";
-import { fetchJSON } from "@/lib/http";
+import { fetchJSON, postJSON } from "@/lib/http";
 import {
   FaCarSide,
   FaLocationDot,
@@ -216,6 +216,68 @@ const styles = {
     marginTop: "8px",
     width: "100%",
   },
+  formFooter: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-end",
+    width: "100%",
+    marginTop: "16px",
+    gap: "8px",
+  },
+  bookingFieldWrapper: {
+    position: "relative",
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+  bookingPicker: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    marginTop: "6px",
+    backgroundColor: "#ffffff",
+    border: `1px solid ${colors.border}`,
+    borderRadius: "14px",
+    boxShadow: "0 12px 24px rgba(15, 59, 124, 0.18)",
+    maxHeight: "280px",
+    overflowY: "auto",
+    zIndex: 30,
+    display: "flex",
+    flexDirection: "column",
+  },
+  bookingOption: {
+    padding: "12px 16px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+    cursor: "pointer",
+    backgroundColor: "#ffffff",
+  },
+  bookingOptionHover: {
+    backgroundColor: "#f3f7ff",
+  },
+  bookingOptionTitle: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    fontWeight: "700",
+    color: colors.textDark,
+    fontSize: "15px",
+  },
+  bookingOptionMeta: {
+    fontSize: "13px",
+    color: colors.textLight,
+  },
+  bookingStatusBadge: {
+    padding: "4px 10px",
+    borderRadius: "999px",
+    backgroundColor: "#ffec99",
+    color: "#8c6d1f",
+    fontSize: "12px",
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
   actionButton: (variant = "primary") => ({
     minWidth: "180px",
     padding: "16px",
@@ -368,7 +430,125 @@ const styles = {
     opacity: 0.6,
     pointerEvents: "none",
   },
+  modalOverlay: {
+    position: "fixed",
+    inset: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "24px",
+    backgroundColor: "rgba(15, 39, 79, 0.45)",
+    zIndex: 9999,
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: "520px",
+    backgroundColor: "#ffffff",
+    borderRadius: "22px",
+    padding: "28px 32px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "18px",
+    boxShadow: "0 24px 48px rgba(11, 61, 128, 0.28)",
+  },
+  modalTitle: {
+    margin: 0,
+    fontSize: "20px",
+    fontWeight: "800",
+    color: colors.primary,
+  },
+  modalLabel: {
+    margin: 0,
+    fontSize: "15px",
+    fontWeight: "700",
+    color: colors.textDark,
+  },
+  modalEmailValue: {
+    margin: 0,
+    fontSize: "15px",
+    fontWeight: "600",
+    color: colors.primary,
+    backgroundColor: colors.accent,
+    borderRadius: "16px",
+    border: `1.5px solid ${colors.border}`,
+    padding: "12px 16px",
+  },
+  modalExtraSection: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "12px",
+  },
+  modalAddButton: {
+    alignSelf: "flex-start",
+    padding: "10px 16px",
+    borderRadius: "14px",
+    border: `1.5px solid ${colors.primary}`,
+    backgroundColor: "#ffffff",
+    color: colors.primary,
+    fontSize: "15px",
+    fontWeight: "700",
+    cursor: "pointer",
+  },
+  modalActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "14px",
+  },
 };
+
+function createEmptyPickupPoint() {
+  return {
+    sequenceNo: 1,
+    travelDate: "",
+    departTime: "",
+    passengerCount: "1",
+    passengerNames: "",
+    locationName: "",
+    district: "",
+    province: "",
+    flightNumber: "",
+    flightTime: "",
+    driverNote: "",
+  };
+}
+
+function createEmptyDropOffPoint(sequenceNo = 1) {
+  return {
+    sequenceNo,
+    travelDate: "",
+    departTime: "",
+    arriveTime: "",
+    passengerCount: "1",
+    passengerNames: "",
+    locationName: "",
+    district: "",
+    province: "",
+    flightNumber: "",
+    flightTime: "",
+    driverNote: "",
+  };
+}
+
+function toDateInputValue(value) {
+  if (!value) return "";
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+  const str = String(value);
+  if (str.includes("T")) {
+    return str.split("T")[0];
+  }
+  return str.slice(0, 10);
+}
+
+function toTimeInputValue(value) {
+  if (!value) return "";
+  if (value instanceof Date) {
+    return value.toISOString().slice(11, 16);
+  }
+  const str = String(value);
+  return str.slice(0, 5);
+}
 
 function LabeledField({ label, required = false, children }) {
   return (
@@ -391,7 +571,6 @@ export default function CompanyBookingPage() {
     department: "",
     factory: "",
   });
-  const [dropOffCount, setDropOffCount] = useState(1);
   const [factories, setFactories] = useState([]);
   const [divisions, setDivisions] = useState([]);
   const [departments, setDepartments] = useState([]);
@@ -403,6 +582,26 @@ export default function CompanyBookingPage() {
     department: "",
   });
   const [cargoFiles, setCargoFiles] = useState([]);
+  const [pickupPointForm, setPickupPointForm] = useState(createEmptyPickupPoint());
+  const [dropOffPointForms, setDropOffPointForms] = useState([createEmptyDropOffPoint(1)]);
+  const [cargoDetails, setCargoDetails] = useState("");
+  const [employeeId, setEmployeeId] = useState("");
+  const [requesterName, setRequesterName] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactEmail, setContactEmail] = useState("");
+  const [additionalEmails, setAdditionalEmails] = useState([""]);
+  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [confirmError, setConfirmError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingBookings, setPendingBookings] = useState([]);
+  const [isLoadingPendingBookings, setIsLoadingPendingBookings] = useState(false);
+  const [pendingBookingsError, setPendingBookingsError] = useState("");
+  const [showBookingPicker, setShowBookingPicker] = useState(false);
+  const [selectedBookingId, setSelectedBookingId] = useState(null);
+  const [isLoadingBookingDetail, setIsLoadingBookingDetail] = useState(false);
+  const formRef = useRef(null);
+  const bookingPickerRef = useRef(null);
 
   useEffect(() => {
     try {
@@ -419,6 +618,9 @@ export default function CompanyBookingPage() {
           parsedProfile?.name ||
           parsedProfile?.username ||
           "";
+        if (nameCandidate) {
+          setRequesterName(nameCandidate);
+        }
         setProfileSummary({
           name: nameCandidate || "",
           department:
@@ -430,6 +632,31 @@ export default function CompanyBookingPage() {
             parsedProfile?.factory ||
             "",
         });
+        const employeeCandidate =
+          parsedProfile?.employeeId ||
+          parsedProfile?.employeeCode ||
+          parsedProfile?.empNo ||
+          parsedProfile?.username ||
+          "";
+        if (employeeCandidate) {
+          setEmployeeId(String(employeeCandidate));
+        }
+        const emailCandidate =
+          parsedProfile?.email ||
+          parsedProfile?.contactEmail ||
+          parsedProfile?.workEmail ||
+          "";
+        if (emailCandidate) {
+          setContactEmail(emailCandidate);
+        }
+        const phoneCandidate =
+          parsedProfile?.phone ||
+          parsedProfile?.contactPhone ||
+          parsedProfile?.mobile ||
+          "";
+        if (phoneCandidate) {
+          setContactPhone(String(phoneCandidate));
+        }
       }
     } catch (error) {
       console.warn("Failed to restore stored session", error);
@@ -499,6 +726,52 @@ export default function CompanyBookingPage() {
   const visibleMenuItems = useMemo(() => getMenuItemsForRole(normalizedRole), [normalizedRole]);
   const roleLabel = ROLE_LABELS[normalizedRole] || normalizedRole;
   const isAdmin = normalizedRole === "admin";
+
+  const loadPendingBookings = useCallback(async () => {
+    if (!isAdmin) {
+      return;
+    }
+    setIsLoadingPendingBookings(true);
+    setPendingBookingsError("");
+    try {
+      const response = await fetchJSON("/api/bookings/company?status=pending");
+      if (!response || !Array.isArray(response.bookings)) {
+        throw new Error("invalid response");
+      }
+      setPendingBookings(response.bookings);
+    } catch (error) {
+      console.error("โหลดรายการการจองที่รออนุมัติไม่สำเร็จ", error);
+      setPendingBookingsError("ไม่สามารถโหลดรายการรออนุมัติได้");
+    } finally {
+      setIsLoadingPendingBookings(false);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      loadPendingBookings();
+    } else {
+      setPendingBookings([]);
+      setSelectedBookingId(null);
+      setShowBookingPicker(false);
+      setPendingBookingsError("");
+    }
+  }, [isAdmin, loadPendingBookings]);
+
+  useEffect(() => {
+    if (!isAdmin || !showBookingPicker) {
+      return undefined;
+    }
+    function handleClickOutside(event) {
+      if (bookingPickerRef.current && !bookingPickerRef.current.contains(event.target)) {
+        setShowBookingPicker(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isAdmin, showBookingPicker]);
   let welcomeText;
   if (normalizedRole === "admin") {
     welcomeText = "ผู้ดูแลระบบ";
@@ -517,7 +790,21 @@ export default function CompanyBookingPage() {
   }
 
   const handleAddDropOffPoint = () => {
-    setDropOffCount((count) => count + 1);
+    setDropOffPointForms((prev) => [...prev, createEmptyDropOffPoint(prev.length + 1)]);
+  };
+
+  const handleEmployeeIdChange = (event) => {
+    setEmployeeId(event.target.value);
+    if (formError) {
+      setFormError("");
+    }
+  };
+
+  const handleRequesterNameChange = (event) => {
+    setRequesterName(event.target.value);
+    if (formError) {
+      setFormError("");
+    }
   };
 
   const handleFactoryChange = (event) => {
@@ -547,8 +834,265 @@ export default function CompanyBookingPage() {
     }));
   };
 
+  const handleContactEmailChange = (event) => {
+    const { value } = event.target;
+    setContactEmail(value);
+    if (formError) {
+      setFormError("");
+    }
+    if (confirmError) {
+      setConfirmError("");
+    }
+  };
+
+  const handleContactPhoneChange = (event) => {
+    const { value } = event.target;
+    setContactPhone(value);
+    if (formError) {
+      setFormError("");
+    }
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    if (!formRef.current) {
+      return;
+    }
+    if (!formRef.current.checkValidity()) {
+      setFormError("กรุณากรอกข้อมูลให้ครบถ้วนในช่องที่มี *");
+      formRef.current.reportValidity();
+      return;
+    }
+    setFormError("");
+    setConfirmError("");
+    if (additionalEmails.length === 0) {
+      setAdditionalEmails([""]);
+    }
+    setIsConfirmModalOpen(true);
+  };
+
+  const handleCloseConfirmModal = () => {
+    if (isSubmitting) {
+      return;
+    }
+    setConfirmError("");
+    setIsConfirmModalOpen(false);
+  };
+
+  const handleAdditionalEmailChange = (index, value) => {
+    setAdditionalEmails((prev) =>
+      prev.map((email, idx) => (idx === index ? value : email))
+    );
+    if (confirmError) {
+      setConfirmError("");
+    }
+  };
+
+  const handleAddAdditionalEmail = () => {
+    setAdditionalEmails((prev) => [...prev, ""]);
+    if (confirmError) {
+      setConfirmError("");
+    }
+  };
+
+  const handleCargoDetailsChange = (event) => {
+    setCargoDetails(event.target.value);
+    if (formError) {
+      setFormError("");
+    }
+  };
+
+  const handlePickupPointChange = (field, value) => {
+    setPickupPointForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const handleDropOffPointChange = (index, field, value) => {
+    setDropOffPointForms((prev) =>
+      prev.map((point, idx) =>
+        idx === index
+          ? {
+              ...point,
+              [field]: value,
+            }
+          : point
+      )
+    );
+  };
+
+  const handleEmployeeFieldFocus = () => {
+    if (!isAdmin) {
+      return;
+    }
+    setPendingBookingsError("");
+    if (!pendingBookings.length && !isLoadingPendingBookings) {
+      loadPendingBookings();
+    }
+    setShowBookingPicker(true);
+  };
+
+  const handleBookingOptionSelect = async (booking) => {
+    setShowBookingPicker(false);
+    setSelectedBookingId(booking.id);
+    setEmployeeId(booking.requesterEmpNo || "");
+    setRequesterName(booking.requesterName || "");
+    setContactPhone(booking.contactPhone || "");
+    setContactEmail(booking.contactEmail || "");
+    setRequesterOrgForm({
+      factory: booking.factoryId ? String(booking.factoryId) : "",
+      division: booking.divisionId ? String(booking.divisionId) : "",
+      department: booking.departmentId ? String(booking.departmentId) : "",
+    });
+    setIsLoadingBookingDetail(true);
+    setPendingBookingsError("");
+    try {
+      const detail = await fetchJSON(`/api/bookings/company?id=${booking.id}`);
+      if (!detail?.booking) {
+        throw new Error("missing booking detail");
+      }
+      const detailData = detail.booking;
+      setEmployeeId(detailData.requesterEmpNo || "");
+      setRequesterName(detailData.requesterName || "");
+      setContactPhone(detailData.contactPhone || "");
+      setContactEmail(detailData.contactEmail || "");
+      setRequesterOrgForm({
+        factory: detailData.factoryId ? String(detailData.factoryId) : "",
+        division: detailData.divisionId ? String(detailData.divisionId) : "",
+        department: detailData.departmentId ? String(detailData.departmentId) : "",
+      });
+      setCargoDetails(detailData.cargoDetails || "");
+      if (detailData.pickupPoints?.length) {
+        const pickup = detailData.pickupPoints[0];
+        setPickupPointForm({
+          sequenceNo: pickup.sequenceNo || 1,
+          travelDate: toDateInputValue(pickup.travelDate),
+          departTime: toTimeInputValue(pickup.departTime),
+          passengerCount: pickup.passengerCount ? String(pickup.passengerCount) : "",
+          passengerNames: pickup.passengerNames || "",
+          locationName: pickup.locationName || "",
+          district: pickup.district || "",
+          province: pickup.province || "",
+          flightNumber: pickup.flightNumber || "",
+          flightTime: toTimeInputValue(pickup.flightTime),
+          driverNote: pickup.driverNote || "",
+        });
+      } else {
+        setPickupPointForm(createEmptyPickupPoint());
+      }
+
+      if (detailData.dropOffPoints?.length) {
+        const dropPoints = detailData.dropOffPoints.map((point, index) => ({
+          sequenceNo: point.sequenceNo || index + 1,
+          travelDate: toDateInputValue(point.travelDate),
+          departTime: toTimeInputValue(point.departTime),
+          arriveTime: toTimeInputValue(point.arriveTime),
+          passengerCount: point.passengerCount ? String(point.passengerCount) : "",
+          passengerNames: point.passengerNames || "",
+          locationName: point.locationName || "",
+          district: point.district || "",
+          province: point.province || "",
+          flightNumber: point.flightNumber || "",
+          flightTime: toTimeInputValue(point.flightTime),
+          driverNote: point.driverNote || "",
+        }));
+        setDropOffPointForms(dropPoints.length ? dropPoints : [createEmptyDropOffPoint(1)]);
+      } else {
+        setDropOffPointForms([createEmptyDropOffPoint(1)]);
+      }
+
+      if (detailData.additionalEmails?.length) {
+        setAdditionalEmails(detailData.additionalEmails);
+      } else {
+        setAdditionalEmails([""]);
+      }
+    } catch (error) {
+      console.error("โหลดรายละเอียดการจองไม่สำเร็จ", error);
+      setPendingBookingsError("ไม่สามารถโหลดรายละเอียดการจองได้");
+    } finally {
+      setIsLoadingBookingDetail(false);
+    }
+  };
+
+  const handleConfirmBooking = async () => {
+    if (!formRef.current) {
+      setConfirmError("ไม่พบข้อมูลแบบฟอร์ม");
+      return;
+    }
+
+    const formData = new FormData(formRef.current);
+    const pickupPayload = {
+      sequenceNo: pickupPointForm.sequenceNo || 1,
+      travelDate: pickupPointForm.travelDate,
+      departTime: pickupPointForm.departTime,
+      passengerCount: pickupPointForm.passengerCount,
+      passengerNames: pickupPointForm.passengerNames,
+      locationName: pickupPointForm.locationName,
+      district: pickupPointForm.district,
+      province: pickupPointForm.province,
+      flightNumber: pickupPointForm.flightNumber,
+      flightTime: pickupPointForm.flightTime,
+      driverNote: pickupPointForm.driverNote,
+    };
+    const dropOffPayload = dropOffPointForms.map((point, index) => ({
+      sequenceNo: point.sequenceNo || index + 1,
+      travelDate: point.travelDate,
+      departTime: point.departTime,
+      arriveTime: point.arriveTime,
+      passengerCount: point.passengerCount,
+      passengerNames: point.passengerNames,
+      locationName: point.locationName,
+      district: point.district,
+      province: point.province,
+      flightNumber: point.flightNumber,
+      flightTime: point.flightTime,
+      driverNote: point.driverNote,
+    }));
+    const payload = {
+      employeeId: String(formData.get("employeeId") || "").trim(),
+      requesterName: String(formData.get("requesterName") || "").trim(),
+      factoryId: String(formData.get("factoryId") || "").trim(),
+      divisionId: String(formData.get("divisionId") || "").trim(),
+      departmentId: String(formData.get("departmentId") || "").trim(),
+      contactPhone: String(formData.get("contactPhone") || "").trim(),
+      contactEmail: String(formData.get("contactEmail") || contactEmail || "").trim(),
+      cargoDetails: String(formData.get("cargoDetails") || "").trim(),
+      additionalEmails: additionalEmails
+        .map((email) => email.trim())
+        .filter((email) => email.length > 0),
+      pickupPoint: pickupPayload,
+      dropOffPoints: dropOffPayload,
+    };
+
+    setConfirmError("");
+    setIsSubmitting(true);
+    try {
+      const result = await postJSON("/api/bookings/company", payload);
+      setIsConfirmModalOpen(false);
+      setFormError("");
+      setAdditionalEmails([""]);
+      setContactEmail(payload.contactEmail);
+      setEmployeeId(payload.employeeId);
+      setRequesterName(payload.requesterName);
+      setContactPhone(payload.contactPhone);
+      setCargoDetails(payload.cargoDetails || "");
+      if (result?.referenceCode) {
+        alert(`บันทึกการจองเรียบร้อย (รหัสอ้างอิง ${result.referenceCode})`);
+      } else {
+        alert("บันทึกการจองเรียบร้อย");
+      }
+    } catch (error) {
+      console.error("ส่งข้อมูลการจองไม่สำเร็จ", error);
+      setConfirmError(error?.message || "ไม่สามารถบันทึกการจองได้");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <main style={styles.page}>
+    <>
+      <main style={styles.page}>
       <aside style={styles.sidebar}>
         <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
           <button
@@ -608,7 +1152,7 @@ export default function CompanyBookingPage() {
         </header>
 
         <div style={styles.body}>
-          <div style={styles.mainForm}>
+          <form ref={formRef} style={styles.mainForm} onSubmit={handleSubmit}>
             <section style={styles.sectionCard}>
               <div style={styles.sectionHeader}>
                 <FaCarSide size={20} /> ข้อมูลผู้จองรถบริษัทฯ
@@ -619,17 +1163,101 @@ export default function CompanyBookingPage() {
               {orgOptionsError ? <p style={styles.errorText}>{orgOptionsError}</p> : null}
               <div style={styles.formGrid(3)}>
                 <LabeledField label="รหัสพนักงานผู้จอง" required>
-                  <input style={styles.input} />
+                  {isAdmin ? (
+                    <div style={styles.bookingFieldWrapper} ref={bookingPickerRef}>
+                      <input
+                        style={styles.input}
+                        name="employeeId"
+                        value={employeeId}
+                        onChange={handleEmployeeIdChange}
+                        onFocus={handleEmployeeFieldFocus}
+                        placeholder="เลือกรหัสการจองที่รออนุมัติ"
+                        autoComplete="off"
+                        required
+                      />
+                      {showBookingPicker ? (
+                        <div style={styles.bookingPicker}>
+                          {isLoadingPendingBookings ? (
+                            <div style={{ padding: "16px", fontSize: "14px", color: colors.textLight }}>
+                              กำลังโหลด...
+                            </div>
+                          ) : pendingBookings.length === 0 ? (
+                            <div style={{ padding: "16px", fontSize: "14px", color: colors.textLight }}>
+                              ไม่มีรายการรออนุมัติ
+                            </div>
+                          ) : (
+                            pendingBookings.map((booking) => (
+                              <div
+                                key={booking.id}
+                                style={styles.bookingOption}
+                                role="button"
+                                tabIndex={0}
+                                onMouseEnter={(event) => {
+                                  event.currentTarget.style.backgroundColor = "#f3f7ff";
+                                }}
+                                onMouseLeave={(event) => {
+                                  event.currentTarget.style.backgroundColor = "#ffffff";
+                                }}
+                                onMouseDown={(event) => {
+                                  event.preventDefault();
+                                  handleBookingOptionSelect(booking);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    handleBookingOptionSelect(booking);
+                                  }
+                                }}
+                              >
+                                <div style={styles.bookingOptionTitle}>
+                                  <span>
+                                    {booking.requesterEmpNo} — {booking.requesterName}
+                                  </span>
+                                  <span style={styles.bookingStatusBadge}>รออนุมัติ</span>
+                                </div>
+                                <span style={styles.bookingOptionMeta}>
+                                  {booking.factoryName} · {booking.divisionName} · {booking.departmentName}
+                                </span>
+                                <span style={styles.bookingOptionMeta}>
+                                  {booking.contactEmail}
+                                </span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <input
+                      style={styles.input}
+                      name="employeeId"
+                      value={employeeId}
+                      onChange={handleEmployeeIdChange}
+                      required
+                    />
+                  )}
+                  {isLoadingBookingDetail ? (
+                    <p style={styles.helperText}>กำลังโหลดข้อมูลการจอง...</p>
+                  ) : null}
+                  {pendingBookingsError ? <p style={styles.errorText}>{pendingBookingsError}</p> : null}
                 </LabeledField>
                 <LabeledField label="ชื่อผู้จอง" required>
-                  <input style={styles.input}  />
+                  <input
+                    style={styles.input}
+                    name="requesterName"
+                    value={requesterName}
+                    onChange={handleRequesterNameChange}
+                    required
+                  />
                 </LabeledField>
                 <LabeledField label="โรงงาน" required>
                   <select
                     style={styles.input}
+                    name="factoryId"
                     value={requesterOrgForm.factory}
                     onChange={handleFactoryChange}
                     disabled={isLoadingOrgOptions && factories.length === 0}
+                    required
                   >
                     <option value="" disabled>
                       {isLoadingOrgOptions ? "กำลังโหลด..." : "เลือกโรงงาน"}
@@ -647,9 +1275,11 @@ export default function CompanyBookingPage() {
                 <LabeledField label="ฝ่าย" required>
                   <select
                     style={styles.input}
+                    name="divisionId"
                     value={requesterOrgForm.division}
                     onChange={handleDivisionChange}
                     disabled={!requesterOrgForm.factory || isLoadingOrgOptions}
+                    required
                   >
                     <option value="" disabled>
                       {!requesterOrgForm.factory
@@ -671,9 +1301,11 @@ export default function CompanyBookingPage() {
                 <LabeledField label="แผนก" required>
                   <select
                     style={styles.input}
+                    name="departmentId"
                     value={requesterOrgForm.department}
                     onChange={handleDepartmentChange}
                     disabled={!requesterOrgForm.division || isLoadingOrgOptions}
+                    required
                   >
                     <option value="" disabled>
                       {!requesterOrgForm.division
@@ -693,10 +1325,26 @@ export default function CompanyBookingPage() {
                   ) : null}
                 </LabeledField>
                 <LabeledField label="เบอร์ติดต่อกลับ" required>
-                  <input style={styles.input}  />
+                  <input
+                    style={styles.input}
+                    name="contactPhone"
+                    value={contactPhone}
+                    onChange={handleContactPhoneChange}
+                    required
+                  />
                 </LabeledField>
                 <LabeledField label="E-mail ติดต่อกลับ" required>
-                  <input style={styles.input}  />
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <input
+                      style={styles.input}
+                      type="email"
+                      name="contactEmail"
+                      value={contactEmail}
+                      onChange={handleContactEmailChange}
+                      placeholder="name@example.com"
+                      required
+                    />
+                  </div>
                 </LabeledField>
               </div>
             </section>
@@ -715,7 +1363,7 @@ export default function CompanyBookingPage() {
                 <div style={styles.pointCard}>
                   <div style={styles.pointHeaderBlock}>
                     <div style={styles.pointHeaderRow}>
-                      <h4 style={styles.pointTitle}>จุดที่ 1</h4>
+                      <h4 style={styles.pointTitle}>{`จุดที่ ${pickupPointForm.sequenceNo || 1}`}</h4>
                       <span style={styles.pointNote}>ข้อมูลจุดขึ้นโดยสาร</span>
                     </div>
                     <div style={styles.pointTabs}>
@@ -725,41 +1373,128 @@ export default function CompanyBookingPage() {
                   </div>
                   <div style={styles.pointGridThree}>
                     <LabeledField label="วันรถออก" required>
-                      <input style={styles.input} type="text" defaultValue="02/10/2025" />
+                      <input
+                        style={styles.input}
+                        type="date"
+                        name="pickupTravelDate"
+                        value={pickupPointForm.travelDate}
+                        onChange={(event) =>
+                          handlePickupPointChange("travelDate", event.target.value)
+                        }
+                        required
+                      />
                     </LabeledField>
                     <LabeledField label="เวลารถออก" required>
-                      <input style={styles.input} type="time" />
+                      <input
+                        style={styles.input}
+                        type="time"
+                        name="pickupDepartTime"
+                        value={pickupPointForm.departTime}
+                        onChange={(event) =>
+                          handlePickupPointChange("departTime", event.target.value)
+                        }
+                        required
+                      />
                     </LabeledField>
                     <LabeledField label="จำนวนผู้โดยสารขึ้นจุดนี้" required>
-                      <input style={styles.input} type="number" min="1" defaultValue="1" />
+                      <input
+                        style={styles.input}
+                        type="number"
+                        min="1"
+                        name="pickupPassengerCount"
+                        value={pickupPointForm.passengerCount}
+                        onChange={(event) =>
+                          handlePickupPointChange("passengerCount", event.target.value)
+                        }
+                        required
+                      />
                     </LabeledField>
                   </div>
                   <div style={styles.pointGridOne}>
                     <LabeledField label="รายชื่อคนขึ้นจุดนี้">
-                      <input style={styles.input} placeholder="" />
+                      <input
+                        style={styles.input}
+                        name="pickupPassengerNames"
+                        value={pickupPointForm.passengerNames}
+                        onChange={(event) =>
+                          handlePickupPointChange("passengerNames", event.target.value)
+                        }
+                        placeholder=""
+                      />
                     </LabeledField>
                   </div>
                   <div style={styles.pointGridThree}>
                     <LabeledField label="สถานที่รับ" required>
-                      <input style={styles.input} placeholder="" />
+                      <input
+                        style={styles.input}
+                        name="pickupLocationName"
+                        value={pickupPointForm.locationName}
+                        onChange={(event) =>
+                          handlePickupPointChange("locationName", event.target.value)
+                        }
+                        placeholder=""
+                        required
+                      />
                     </LabeledField>
                     <LabeledField label="อำเภอ" required>
-                      <input style={styles.input} placeholder="" />
+                      <input
+                        style={styles.input}
+                        name="pickupDistrict"
+                        value={pickupPointForm.district}
+                        onChange={(event) =>
+                          handlePickupPointChange("district", event.target.value)
+                        }
+                        placeholder=""
+                        required
+                      />
                     </LabeledField>
                     <LabeledField label="จังหวัด" required>
-                      <input style={styles.input} placeholder="" />
+                      <input
+                        style={styles.input}
+                        name="pickupProvince"
+                        value={pickupPointForm.province}
+                        onChange={(event) =>
+                          handlePickupPointChange("province", event.target.value)
+                        }
+                        placeholder=""
+                        required
+                      />
                     </LabeledField>
                   </div>
                   <p style={styles.subSectionLabel}>เดินทางโดยเครื่องบิน (จุดต้นทาง)</p>
                   <div style={styles.pointGridThree}>
                     <LabeledField label="เที่ยวบิน">
-                      <input style={styles.input} placeholder="เช่น TG123" />
+                      <input
+                        style={styles.input}
+                        name="pickupFlightNumber"
+                        value={pickupPointForm.flightNumber}
+                        onChange={(event) =>
+                          handlePickupPointChange("flightNumber", event.target.value)
+                        }
+                        placeholder="เช่น TG123"
+                      />
                     </LabeledField>
                     <LabeledField label="เวลาแลนดิ้ง">
-                      <input style={styles.input} type="time" />
+                      <input
+                        style={styles.input}
+                        type="time"
+                        name="pickupFlightTime"
+                        value={pickupPointForm.flightTime}
+                        onChange={(event) =>
+                          handlePickupPointChange("flightTime", event.target.value)
+                        }
+                      />
                     </LabeledField>
                     <LabeledField label="หมายเหตุถึงคนขับ+ต้นทาง">
-                      <input style={styles.input} placeholder="" />
+                      <input
+                        style={styles.input}
+                        name="pickupDriverNote"
+                        value={pickupPointForm.driverNote}
+                        onChange={(event) =>
+                          handlePickupPointChange("driverNote", event.target.value)
+                        }
+                        placeholder=""
+                      />
                     </LabeledField>
                   </div>
                   <button type="button" style={styles.fileButton} onClick={handleAddDropOffPoint}>
@@ -767,11 +1502,12 @@ export default function CompanyBookingPage() {
                   </button>
                 </div>
 
-                {Array.from({ length: dropOffCount }, (_, index) => {
-                  const title = index === 0 ? "ปลายทาง" : `ปลายทางที่ ${index + 1}`;
-                  const showBottomNote = index === dropOffCount - 1;
+                {dropOffPointForms.map((point, index) => {
+                  const sequenceLabel = point.sequenceNo || index + 1;
+                  const title = sequenceLabel === 1 ? "ปลายทาง" : `ปลายทางที่ ${sequenceLabel}`;
+                  const isLast = index === dropOffPointForms.length - 1;
                   return (
-                    <div key={`dropoff-${index}`} style={styles.pointCard}>
+                    <div key={`dropoff-${point.sequenceNo || index}`} style={styles.pointCard}>
                       <div style={styles.pointHeaderBlock}>
                         <div style={styles.pointHeaderRow}>
                           <h4 style={styles.pointTitle}>{title}</h4>
@@ -784,41 +1520,119 @@ export default function CompanyBookingPage() {
                       </div>
                       <div style={styles.pointGridThree}>
                         <LabeledField label="เวลาถึงปลายทาง" required>
-                          <input style={styles.input} type="time" />
+                          <input
+                            style={styles.input}
+                            type="time"
+                            name={`dropoff-${index}-arriveTime`}
+                            value={point.arriveTime}
+                            onChange={(event) =>
+                              handleDropOffPointChange(index, "arriveTime", event.target.value)
+                            }
+                            required
+                          />
                         </LabeledField>
                         <LabeledField label="จำนวนผู้โดยสารขึ้นจุดนี้" required>
-                          <input style={styles.input} type="number" min="1" defaultValue="1" />
+                          <input
+                            style={styles.input}
+                            type="number"
+                            min="1"
+                            name={`dropoff-${index}-passengerCount`}
+                            value={point.passengerCount}
+                            onChange={(event) =>
+                              handleDropOffPointChange(index, "passengerCount", event.target.value)
+                            }
+                            required
+                          />
                         </LabeledField>
                       </div>
                       <div style={styles.pointGridOne}>
                         <LabeledField label="รายชื่อคนขึ้นจุดนี้">
-                          <input style={styles.input} placeholder="" />
+                          <input
+                            style={styles.input}
+                            name={`dropoff-${index}-passengerNames`}
+                            value={point.passengerNames}
+                            onChange={(event) =>
+                              handleDropOffPointChange(index, "passengerNames", event.target.value)
+                            }
+                            placeholder=""
+                          />
                         </LabeledField>
                       </div>
                       <div style={styles.pointGridThree}>
                         <LabeledField label="สถานที่รับ" required>
-                          <input style={styles.input} placeholder="" />
+                          <input
+                            style={styles.input}
+                            name={`dropoff-${index}-locationName`}
+                            value={point.locationName}
+                            onChange={(event) =>
+                              handleDropOffPointChange(index, "locationName", event.target.value)
+                            }
+                            placeholder=""
+                            required
+                          />
                         </LabeledField>
                         <LabeledField label="อำเภอ" required>
-                          <input style={styles.input} placeholder="" />
+                          <input
+                            style={styles.input}
+                            name={`dropoff-${index}-district`}
+                            value={point.district}
+                            onChange={(event) =>
+                              handleDropOffPointChange(index, "district", event.target.value)
+                            }
+                            placeholder=""
+                            required
+                          />
                         </LabeledField>
                         <LabeledField label="จังหวัด" required>
-                          <input style={styles.input} placeholder="" />
+                          <input
+                            style={styles.input}
+                            name={`dropoff-${index}-province`}
+                            value={point.province}
+                            onChange={(event) =>
+                              handleDropOffPointChange(index, "province", event.target.value)
+                            }
+                            placeholder=""
+                            required
+                          />
                         </LabeledField>
                       </div>
                       <p style={styles.subSectionLabel}>เดินทางโดยเครื่องบิน (จุดปลายทาง)</p>
                       <div style={styles.pointGridThree}>
                         <LabeledField label="เที่ยวบิน">
-                          <input style={styles.input} placeholder="เช่น TG123" />
+                          <input
+                            style={styles.input}
+                            name={`dropoff-${index}-flightNumber`}
+                            value={point.flightNumber}
+                            onChange={(event) =>
+                              handleDropOffPointChange(index, "flightNumber", event.target.value)
+                            }
+                            placeholder="เช่น TG123"
+                          />
                         </LabeledField>
                         <LabeledField label="เวลาแลนดิ้ง">
-                          <input style={styles.input} type="time" />
+                          <input
+                            style={styles.input}
+                            type="time"
+                            name={`dropoff-${index}-flightTime`}
+                            value={point.flightTime}
+                            onChange={(event) =>
+                              handleDropOffPointChange(index, "flightTime", event.target.value)
+                            }
+                          />
                         </LabeledField>
                         <LabeledField label="หมายเหตุถึงคนขับ+ปลายทาง">
-                          <input style={styles.input} placeholder="" />
+                          <input
+                            style={styles.input}
+                            name={`dropoff-${index}-driverNote`}
+                            value={point.driverNote}
+                            onChange={(event) =>
+                              handleDropOffPointChange(index, "driverNote", event.target.value)
+                            }
+                            placeholder=""
+                          />
                         </LabeledField>
                       </div>
-                      {showBottomNote ? (
+                      {isLast ? (
                         <p style={styles.bottomNote}>สามารถเพิ่มได้หลายจุดตามลำดับการเดินทาง</p>
                       ) : null}
                     </div>
@@ -832,7 +1646,14 @@ export default function CompanyBookingPage() {
                 <FaClipboardList size={20} /> ระบุกรณีมีของบรรทุกบนรถ
               </div>
               <LabeledField label="ระบุรายละเอียด" required>
-                <textarea style={styles.textarea} placeholder="ระบุรายละเอียด เช่น ประเภทของสิ่งของ ขนาดหรือน้ำหนัก จุดโหลด/สิ่งที่ควรระวัง"></textarea>
+                <textarea
+                  style={styles.textarea}
+                  name="cargoDetails"
+                  placeholder="ระบุรายละเอียด เช่น ประเภทของสิ่งของ ขนาดหรือน้ำหนัก จุดโหลด/สิ่งที่ควรระวัง"
+                  value={cargoDetails}
+                  onChange={handleCargoDetailsChange}
+                  required
+                ></textarea>
               </LabeledField>
               <CargoAttachmentsInput
                 files={cargoFiles}
@@ -856,49 +1677,120 @@ export default function CompanyBookingPage() {
               </p>
               <div style={styles.formGrid(3)}>
                 <LabeledField label="ยืนยันพนักงานขับรถ" required>
-                  <input style={styles.input} disabled={!isAdmin} />
+                  <input style={styles.input} disabled={!isAdmin} required />
                 </LabeledField>
                 <LabeledField label="เบอร์โทรพนักงานขับรถ" required>
-                  <input style={styles.input} disabled={!isAdmin} />
+                  <input style={styles.input} disabled={!isAdmin} required />
                 </LabeledField>
                 <LabeledField label="ยืนยันรถที่ใช้" required>
-                  <select style={styles.input} disabled={!isAdmin}>
+                  <select style={styles.input} disabled={!isAdmin} required>
                     <option>เลือกรถ</option>
                     <option>5ก-5902</option>
                     <option>7ก-2087</option>
                   </select>
                 </LabeledField>
                 <LabeledField label="ประเภทรถ" required>
-                  <select style={styles.input} disabled={!isAdmin}>
+                  <select style={styles.input} disabled={!isAdmin} required>
                     <option>ระบุ</option>
                     <option>รถเก๋ง</option>
                     <option>รถตู้</option>
                   </select>
                 </LabeledField>
                 <LabeledField label="สถานะการจอง" required>
-                  <select style={styles.input} disabled={!isAdmin}>
+                  <select style={styles.input} disabled={!isAdmin} required>
                     <option>ระบุ</option>
                     <option>อนุมัติ</option>
                     <option>ไม่อนุมัติ</option>
                   </select>
                 </LabeledField>
                 <LabeledField label="เหตุผลการไม่อนุมัติ" required>
-                  <input style={styles.input} disabled={!isAdmin} />
+                  <input style={styles.input} disabled={!isAdmin} required />
                 </LabeledField>
               </div>
             </section>
-          </div>
-
-          <div style={styles.asideActions}>
-            <button type="button" style={styles.actionButton("outline")}>
-              ยกเลิกการจอง
-            </button>
-            <button type="button" style={styles.actionButton("dark")}>
-              บันทึกการจอง
-            </button>
-          </div>
+            <div style={styles.formFooter}>
+              {formError ? <p style={styles.errorText}>{formError}</p> : null}
+              <div style={styles.asideActions}>
+                <button type="button" style={styles.actionButton("outline")}>
+                  ยกเลิกการจอง
+                </button>
+                <button type="submit" style={styles.actionButton("dark")}>
+                  บันทึกการจอง
+                </button>
+              </div>
+            </div>
+          </form>
         </div>
       </section>
-    </main>
+      </main>
+      {isConfirmModalOpen ? (
+        <div style={styles.modalOverlay} onClick={handleCloseConfirmModal}>
+          <div
+            style={styles.modalCard}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 style={styles.modalTitle}>ตรวจสอบอีเมลสำหรับการติดต่อกลับ</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <span style={styles.modalLabel}>E-mail ติดต่อกลับ :</span>
+              <p style={styles.modalEmailValue}>{contactEmail}</p>
+            </div>
+            <div style={styles.modalExtraSection}>
+              <span style={styles.modalLabel}>E-mail ติดต่อกลับเพิ่มเติม</span>
+              {additionalEmails.map((email, index) => (
+                <input
+                  key={`additional-email-${index}`}
+                  style={styles.input}
+                  type="email"
+                  value={email}
+                  placeholder="ระบุ E-mail เพิ่มเติม"
+                  onChange={(event) =>
+                    handleAdditionalEmailChange(index, event.target.value)
+                  }
+                />
+              ))}
+              <button
+                type="button"
+                style={styles.modalAddButton}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleAddAdditionalEmail();
+                }}
+              >
+                + E-mail ติดต่อกลับ
+              </button>
+            </div>
+            {confirmError ? (
+              <p style={{ ...styles.errorText, alignSelf: "flex-start" }}>{confirmError}</p>
+            ) : null}
+            <div style={styles.modalActions}>
+              <button
+                type="button"
+                style={{
+                  ...styles.actionButton("outline"),
+                  opacity: isSubmitting ? 0.7 : 1,
+                  cursor: isSubmitting ? "not-allowed" : "pointer",
+                }}
+                onClick={handleCloseConfirmModal}
+                disabled={isSubmitting}
+              >
+                ยกเลิก
+              </button>
+              <button
+                type="button"
+                style={{
+                  ...styles.actionButton("dark"),
+                  opacity: isSubmitting ? 0.7 : 1,
+                  cursor: isSubmitting ? "wait" : "pointer",
+                }}
+                onClick={handleConfirmBooking}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "กำลังส่ง..." : "ยืนยันการจอง"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
