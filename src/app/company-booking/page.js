@@ -617,6 +617,10 @@ export default function CompanyBookingPage() {
   const [isLoadingVehicles, setIsLoadingVehicles] = useState(false);
   const [gaVehicleId, setGaVehicleId] = useState("");
   const [gaVehicleType, setGaVehicleType] = useState("");
+  const [gaDriverName, setGaDriverName] = useState("");
+  const [gaDriverPhone, setGaDriverPhone] = useState("");
+  const [gaStatus, setGaStatus] = useState("");
+  const [gaRejectReason, setGaRejectReason] = useState("");
   const formRef = useRef(null);
   const bookingPickerRef = useRef(null);
 
@@ -825,6 +829,10 @@ export default function CompanyBookingPage() {
       setVehicleOptionsError("");
       setGaVehicleId("");
       setGaVehicleType("");
+      setGaDriverName("");
+      setGaDriverPhone("");
+      setGaStatus("");
+      setGaRejectReason("");
     }
   }, [isAdmin, loadVehicleOptions]);
 
@@ -837,6 +845,12 @@ export default function CompanyBookingPage() {
       setGaVehicleType(String(matchedVehicle.vehicleType));
     }
   }, [gaVehicleId, gaVehicleType, vehicleOptions]);
+
+  useEffect(() => {
+    if (gaStatus !== "rejected" && gaRejectReason) {
+      setGaRejectReason("");
+    }
+  }, [gaStatus, gaRejectReason]);
 
   useEffect(() => {
     if (!gaVehicleId) {
@@ -1110,6 +1124,11 @@ export default function CompanyBookingPage() {
       } else {
         setGaVehicleType("");
       }
+      setGaDriverName(detailData.gaDriverName || "");
+      setGaDriverPhone(detailData.gaDriverPhone || "");
+      const normalizedStatus = detailData.gaStatus ? String(detailData.gaStatus).toLowerCase() : "";
+      setGaStatus(normalizedStatus === "pending" ? "" : normalizedStatus);
+      setGaRejectReason(detailData.gaRejectReason || "");
     } catch (error) {
       console.error("โหลดรายละเอียดการจองไม่สำเร็จ", error);
       setPendingBookingsError("ไม่สามารถโหลดรายละเอียดการจองได้");
@@ -1166,6 +1185,13 @@ export default function CompanyBookingPage() {
         .filter((email) => email.length > 0),
       pickupPoint: pickupPayload,
       dropOffPoints: dropOffPayload,
+      gaDriverName: gaDriverName.trim(),
+      gaDriverPhone: gaDriverPhone.trim(),
+      gaVehicleId,
+      gaVehicleType,
+      gaStatus,
+      gaRejectReason: gaRejectReason.trim(),
+      bookingId: selectedBookingId,
     };
 
     setConfirmError("");
@@ -1174,16 +1200,52 @@ export default function CompanyBookingPage() {
       const result = await postJSON("/api/bookings/company", payload);
       setIsConfirmModalOpen(false);
       setFormError("");
-      setAdditionalEmails([""]);
-      setContactEmail(payload.contactEmail);
-      setEmployeeId(payload.employeeId);
-      setRequesterName(payload.requesterName);
-      setContactPhone(payload.contactPhone);
-      setCargoDetails(payload.cargoDetails || "");
-      if (result?.referenceCode) {
-        alert(`บันทึกการจองเรียบร้อย (รหัสอ้างอิง ${result.referenceCode})`);
+      if (selectedBookingId) {
+        const statusLabel = result?.gaStatus === "approved"
+          ? "อนุมัติ"
+          : result?.gaStatus === "rejected"
+          ? "ไม่อนุมัติ"
+          : "อัปเดต";
+        alert(`บันทึกสถานะการจอง${statusLabel ? ` (${statusLabel})` : ""}เรียบร้อย`);
+        if (isAdmin) {
+          await loadPendingBookings();
+        }
+        setSelectedBookingId(null);
+        setShowBookingPicker(false);
+        setPendingBookingsError("");
+        setEmployeeId("");
+        setRequesterName("");
+        setContactPhone("");
+        setContactEmail("");
+        setRequesterOrgForm({ factory: "", division: "", department: "" });
+        setPickupPointForm(createEmptyPickupPoint());
+        setDropOffPointForms([createEmptyDropOffPoint(1)]);
+        setAdditionalEmails([""]);
+        setCargoDetails("");
+        setGaDriverName("");
+        setGaDriverPhone("");
+        setGaVehicleId("");
+        setGaVehicleType("");
+        setGaStatus("");
+        setGaRejectReason("");
       } else {
-        alert("บันทึกการจองเรียบร้อย");
+        setAdditionalEmails([""]);
+        setContactEmail(payload.contactEmail);
+        setEmployeeId(payload.employeeId);
+        setRequesterName(payload.requesterName);
+        setContactPhone(payload.contactPhone);
+        setCargoDetails(payload.cargoDetails || "");
+        setGaDriverName("");
+        setGaDriverPhone("");
+        setGaVehicleId("");
+        setGaVehicleType("");
+        setGaStatus("");
+        setGaRejectReason("");
+        if (result?.referenceCode) {
+          alert(`บันทึกการจองรถบริษัทฯ เรียบร้อย (รหัสอ้างอิง ${result.referenceCode})`);
+        } else {
+          alert("บันทึกการจองรถบริษัทฯ เรียบร้อย");
+        }
       }
     } catch (error) {
       console.error("ส่งข้อมูลการจองไม่สำเร็จ", error);
@@ -1780,10 +1842,24 @@ export default function CompanyBookingPage() {
               </p>
               <div style={styles.formGrid(3)}>
                 <LabeledField label="ยืนยันพนักงานขับรถ" required>
-                  <input style={styles.input} disabled={!isAdmin} required />
+                  <input
+                    style={styles.input}
+                    name="gaDriverName"
+                    value={gaDriverName}
+                    onChange={(event) => setGaDriverName(event.target.value)}
+                    disabled={!isAdmin}
+                    required={isAdmin}
+                  />
                 </LabeledField>
                 <LabeledField label="เบอร์โทรพนักงานขับรถ" required>
-                  <input style={styles.input} disabled={!isAdmin} required />
+                  <input
+                    style={styles.input}
+                    name="gaDriverPhone"
+                    value={gaDriverPhone}
+                    onChange={(event) => setGaDriverPhone(event.target.value)}
+                    disabled={!isAdmin}
+                    required={isAdmin}
+                  />
                 </LabeledField>
                 <LabeledField label="ยืนยันรถที่ใช้" required>
                   <select
@@ -1833,14 +1909,28 @@ export default function CompanyBookingPage() {
                   </select>
                 </LabeledField>
                 <LabeledField label="สถานะการจอง" required>
-                  <select style={styles.input} disabled={!isAdmin} required>
-                    <option>ระบุ</option>
-                    <option>อนุมัติ</option>
-                    <option>ไม่อนุมัติ</option>
+                  <select
+                    style={styles.input}
+                    name="gaStatus"
+                    value={gaStatus}
+                    onChange={(event) => setGaStatus(event.target.value)}
+                    disabled={!isAdmin}
+                    required={isAdmin}
+                  >
+                    <option value="">ระบุ</option>
+                    <option value="approved">อนุมัติ</option>
+                    <option value="rejected">ไม่อนุมัติ</option>
                   </select>
                 </LabeledField>
-                <LabeledField label="เหตุผลการไม่อนุมัติ" required>
-                  <input style={styles.input} disabled={!isAdmin} required />
+                <LabeledField label="เหตุผลการไม่อนุมัติ">
+                  <input
+                    style={styles.input}
+                    name="gaRejectReason"
+                    value={gaRejectReason}
+                    onChange={(event) => setGaRejectReason(event.target.value)}
+                    disabled={!isAdmin || gaStatus !== "rejected"}
+                    required={isAdmin && gaStatus === "rejected"}
+                  />
                 </LabeledField>
               </div>
               {isAdmin && vehicleOptionsError ? (

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
+import sgMail from "@sendgrid/mail";
 import { initDatabase, query } from "@/lib/db";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -144,6 +145,162 @@ function normalizeDropOffPoints(input) {
       driverNote: optionalText(item.driverNote),
     };
   });
+}
+
+let sendgridConfigured = false;
+
+function ensureSendgridConfigured() {
+  if (sendgridConfigured) {
+    return true;
+  }
+  const apiKey = (process.env.SENDGRID_API_KEY || "").trim();
+  if (!apiKey) {
+    return false;
+  }
+  try {
+    sgMail.setApiKey(apiKey);
+    sendgridConfigured = true;
+    return true;
+  } catch (error) {
+    console.error("[bookings/rental] configure sendgrid failed", error);
+    return false;
+  }
+}
+
+async function syncBookingPoints(bookingId, pickupPoint, dropOffPoints = []) {
+  if (!bookingId) {
+    throw new Error("bookingId is required when syncing booking points");
+  }
+
+  if (pickupPoint) {
+    await query(
+      `INSERT INTO booking_points (
+         booking_id,
+         point_type,
+         sequence_no,
+         travel_date,
+         depart_time,
+         arrive_time,
+         passenger_count,
+         passenger_names,
+         location_name,
+         district,
+         province,
+         flight_number,
+         flight_time,
+         note_to_driver
+       ) VALUES (?, 'pickup', ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         travel_date = VALUES(travel_date),
+         depart_time = VALUES(depart_time),
+         arrive_time = VALUES(arrive_time),
+         passenger_count = VALUES(passenger_count),
+         passenger_names = VALUES(passenger_names),
+         location_name = VALUES(location_name),
+         district = VALUES(district),
+         province = VALUES(province),
+         flight_number = VALUES(flight_number),
+         flight_time = VALUES(flight_time),
+         note_to_driver = VALUES(note_to_driver)`
+      , [
+        bookingId,
+        pickupPoint.sequenceNo,
+        pickupPoint.travelDate || null,
+        pickupPoint.departTime || null,
+        pickupPoint.passengerCount || null,
+        pickupPoint.passengerNames || null,
+        pickupPoint.locationName || null,
+        pickupPoint.district || null,
+        pickupPoint.province || null,
+        pickupPoint.flightNumber || null,
+        pickupPoint.flightTime || null,
+        pickupPoint.driverNote || null,
+      ]
+    );
+
+    await query(
+      `DELETE FROM booking_points
+       WHERE booking_id = ? AND point_type = 'pickup' AND sequence_no <> ?`
+      , [bookingId, pickupPoint.sequenceNo]
+    );
+  }
+
+  const dropOffArray = Array.isArray(dropOffPoints) ? dropOffPoints : [];
+  const sequenceSet = new Set();
+
+  for (let index = 0; index < dropOffArray.length; index += 1) {
+    const point = dropOffArray[index];
+    const sequenceNoCandidate = Number.isInteger(point.sequenceNo)
+      ? point.sequenceNo
+      : Number.parseInt(point.sequenceNo, 10) || index + 1;
+    const sequenceNo = sequenceNoCandidate > 0 ? sequenceNoCandidate : index + 1;
+    sequenceSet.add(sequenceNo);
+
+    await query(
+      `INSERT INTO booking_points (
+         booking_id,
+         point_type,
+         sequence_no,
+         travel_date,
+         depart_time,
+         arrive_time,
+         passenger_count,
+         passenger_names,
+         location_name,
+         district,
+         province,
+         flight_number,
+         flight_time,
+         note_to_driver
+       ) VALUES (?, 'dropoff', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         travel_date = VALUES(travel_date),
+         depart_time = VALUES(depart_time),
+         arrive_time = VALUES(arrive_time),
+         passenger_count = VALUES(passenger_count),
+         passenger_names = VALUES(passenger_names),
+         location_name = VALUES(location_name),
+         district = VALUES(district),
+         province = VALUES(province),
+         flight_number = VALUES(flight_number),
+         flight_time = VALUES(flight_time),
+         note_to_driver = VALUES(note_to_driver)`
+      , [
+        bookingId,
+        sequenceNo,
+        point.travelDate || null,
+        point.departTime || null,
+        point.arriveTime || null,
+        point.passengerCount || null,
+        point.passengerNames || null,
+        point.locationName || null,
+        point.district || null,
+        point.province || null,
+        point.flightNumber || null,
+        point.flightTime || null,
+        point.driverNote || null,
+      ]
+    );
+  }
+
+  const sequenceList = Array.from(sequenceSet);
+  if (sequenceList.length) {
+    const placeholders = sequenceList.map(() => "?").join(", ");
+    await query(
+      `DELETE FROM booking_points
+       WHERE booking_id = ?
+         AND point_type = 'dropoff'
+         AND sequence_no NOT IN (${placeholders})`
+      , [bookingId, ...sequenceList]
+    );
+  } else {
+    await query(
+      `DELETE FROM booking_points
+       WHERE booking_id = ?
+         AND point_type = 'dropoff'`
+      , [bookingId]
+    );
+  }
 }
 
 function invalidResponse(message, status = 400) {
@@ -329,6 +486,9 @@ export async function POST(request) {
     return invalidResponse("รูปแบบข้อมูลไม่ถูกต้อง", 400);
   }
 
+  const bookingIdRaw = Number.parseInt(body?.bookingId ?? body?.id ?? "", 10);
+  const isUpdate = Number.isInteger(bookingIdRaw) && bookingIdRaw > 0;
+
   const employeeId = String(body?.employeeId || "").trim();
   const requesterName = String(body?.requesterName || "").trim();
   const factoryId = Number.parseInt(body?.factoryId, 10);
@@ -338,6 +498,15 @@ export async function POST(request) {
   const contactEmail = sanitizeEmail(body?.contactEmail);
   const cargoDetails = String(body?.cargoDetails || "").trim();
   const additionalEmailsRaw = Array.isArray(body?.additionalEmails) ? body.additionalEmails : [];
+
+  const gaDriverName = String(body?.gaDriverName || "").trim();
+  const gaDriverPhone = String(body?.gaDriverPhone || "").trim();
+  const gaVehicleTypeRaw = String(body?.gaVehicleType || "").trim();
+  const gaVehicleIdCandidate = Number.parseInt(String(body?.gaVehicleId ?? "").trim(), 10);
+  const gaVehicleId = Number.isFinite(gaVehicleIdCandidate) && gaVehicleIdCandidate > 0 ? gaVehicleIdCandidate : null;
+  const gaRejectReason = String(body?.gaRejectReason || "").trim();
+  const gaStatusRaw = String(body?.gaStatus || "").trim().toLowerCase();
+  let gaStatus = gaStatusRaw;
 
   let pickupPoint;
   let dropOffPoints;
@@ -364,6 +533,29 @@ export async function POST(request) {
     return invalidResponse("กรุณาระบุอีเมลติดต่อกลับที่ถูกต้อง");
   }
 
+  if (isUpdate) {
+    if (!["approved", "rejected"].includes(gaStatus)) {
+      return invalidResponse("กรุณาเลือกสถานะการจอง (อนุมัติหรือไม่อนุมัติ)");
+    }
+    if (!gaDriverName) {
+      return invalidResponse("กรุณาระบุพนักงานขับรถ");
+    }
+    if (!gaDriverPhone) {
+      return invalidResponse("กรุณาระบุเบอร์โทรพนักงานขับรถ");
+    }
+    if (!gaVehicleId) {
+      return invalidResponse("กรุณาเลือกรถที่ใช้");
+    }
+    if (!gaVehicleTypeRaw) {
+      return invalidResponse("กรุณาระบุประเภทรถ");
+    }
+    if (gaStatus === "rejected" && !gaRejectReason) {
+      return invalidResponse("กรุณาระบุเหตุผลการไม่อนุมัติ");
+    }
+  } else {
+    gaStatus = "pending";
+  }
+
   try {
     pickupPoint = normalizePickupPoint(body?.pickupPoint);
     dropOffPoints = normalizeDropOffPoints(body?.dropOffPoints);
@@ -380,7 +572,7 @@ export async function POST(request) {
   );
 
   let adminEmail = sanitizeEmail(process.env.BOOKING_RENTAL_ADMIN_EMAIL || process.env.BOOKING_ADMIN_EMAIL || process.env.ADMIN_EMAIL);
-  if (!adminEmail) {
+  if (!adminEmail && !isUpdate) {
     try {
       const [adminRow] = await query(
         `SELECT email
@@ -394,7 +586,7 @@ export async function POST(request) {
       console.error("[bookings/rental] admin email lookup failed", lookupError);
     }
   }
-  if (!adminEmail) {
+  if (!adminEmail && !isUpdate) {
     return invalidResponse("ยังไม่ได้กำหนดอีเมลผู้ดูแลระบบ (BOOKING_RENTAL_ADMIN_EMAIL หรือ BOOKING_ADMIN_EMAIL หรือ ADMIN_EMAIL)", 500);
   }
 
@@ -432,7 +624,6 @@ export async function POST(request) {
     return invalidResponse("ข้อมูลโรงงาน/ฝ่าย/แผนกไม่สอดคล้องกัน", 400);
   }
 
-  const referenceCode = generateReferenceCode();
   let transporter;
   let fromAddress = smtpFrom || contactEmail;
   if (smtpHost) {
@@ -454,6 +645,179 @@ export async function POST(request) {
     fromAddress = contactEmail;
   }
 
+  const templateId = (process.env.SENDGRID_TEMPLATE_ID || "").trim();
+  const canUseSendgrid = Boolean(templateId && ensureSendgridConfigured());
+
+  if (isUpdate) {
+    try {
+      const [existingBooking] = await query(
+        `SELECT id, booking_type, reference_code
+         FROM bookings
+         WHERE id = ?
+         LIMIT 1`,
+        [bookingIdRaw]
+      );
+
+      if (!existingBooking || existingBooking.booking_type !== "rental") {
+        return invalidResponse("ไม่พบข้อมูลการจอง", 404);
+      }
+
+      await query(
+        `UPDATE bookings
+           SET requester_emp_no = ?,
+               requester_name = ?,
+               factory_id = ?,
+               division_id = ?,
+               department_id = ?,
+               contact_phone = ?,
+               contact_email = ?,
+               cargo_details = ?,
+               ga_driver_name = ?,
+               ga_driver_phone = ?,
+               ga_vehicle_id = ?,
+               ga_vehicle_type = ?,
+               ga_status = ?,
+               ga_reject_reason = ?
+         WHERE id = ?`,
+        [
+          employeeId,
+          requesterName,
+          factoryId,
+          divisionId,
+          departmentId,
+          contactPhone,
+          contactEmail,
+          cargoDetails || null,
+          gaDriverName || null,
+          gaDriverPhone || null,
+          gaVehicleId,
+          gaVehicleTypeRaw || null,
+          gaStatus,
+          gaStatus === "rejected" ? gaRejectReason || null : null,
+          bookingIdRaw,
+        ]
+      );
+
+      await syncBookingPoints(bookingIdRaw, pickupPoint, dropOffPoints);
+
+      const recipientEmails = Array.from(
+        new Set([contactEmail, ...additionalEmails])
+      );
+
+      if (recipientEmails.length) {
+        await Promise.all(
+          recipientEmails.map((email) =>
+            query(
+              `INSERT INTO booking_notifications (booking_id, email, notified_at)
+               VALUES (?, ?, NOW())
+               ON DUPLICATE KEY UPDATE notified_at = VALUES(notified_at)`
+              , [bookingIdRaw, email]
+            )
+          )
+        );
+      }
+
+      const referenceCode = existingBooking.reference_code;
+      const statusLabel = gaStatus === "approved" ? "อนุมัติ" : "ไม่อนุมัติ";
+      const templateData = {
+        bookingType: "rental",
+        referenceCode,
+        status: gaStatus,
+        statusLabel,
+        requesterName,
+        employeeId,
+        contactEmail,
+        contactPhone,
+        gaDriverName,
+        gaDriverPhone,
+        gaVehicleType: gaVehicleTypeRaw,
+        gaVehicleId: gaVehicleId ? String(gaVehicleId) : "",
+        rejectReason: gaStatus === "rejected" ? gaRejectReason || "-" : "",
+        factoryName: organization.factoryName,
+        divisionName: organization.divisionName,
+        departmentName: organization.departmentName,
+      };
+
+      let statusMailDelivered = false;
+      if (recipientEmails.length && canUseSendgrid) {
+        try {
+          await sgMail.send({
+            from: fromAddress,
+            to: recipientEmails[0],
+            cc: recipientEmails.length > 1 ? recipientEmails.slice(1) : undefined,
+            templateId,
+            dynamicTemplateData: templateData,
+          });
+          statusMailDelivered = true;
+        } catch (mailError) {
+          console.error("[bookings/rental] sendgrid status mail failed", mailError);
+        }
+      }
+
+      if (recipientEmails.length && !statusMailDelivered) {
+        const messageLines = [
+          `เรียน ${requesterName || "ผู้จอง"},`,
+          "",
+          `สถานะการจองรถเช่า (รหัสอ้างอิง ${referenceCode}) : ${statusLabel}`,
+          `รหัสพนักงาน : ${employeeId}`,
+          `เบอร์ติดต่อกลับ : ${contactPhone}`,
+          `คนขับที่ได้รับมอบหมาย : ${gaDriverName} (${gaDriverPhone})`,
+          `ประเภทรถ : ${gaVehicleTypeRaw || "-"}`,
+        ];
+        if (gaStatus === "rejected") {
+          messageLines.push(`เหตุผลการไม่อนุมัติ : ${gaRejectReason || "-"}`);
+        }
+        messageLines.push(
+          "",
+          "หากมีข้อสงสัยเพิ่มเติมโปรดติดต่อ GA Service"
+        );
+
+        try {
+          await transporter.sendMail({
+            from: fromAddress,
+            to: recipientEmails[0],
+            cc: recipientEmails.length > 1 ? recipientEmails.slice(1) : undefined,
+            subject: `สถานะการจองรถเช่า (${referenceCode})`,
+            text: messageLines.join("\n"),
+          });
+        } catch (fallbackError) {
+          console.error("[bookings/rental] fallback status mail failed", fallbackError);
+        }
+      }
+
+      await query(
+        `INSERT INTO booking_history (booking_id, actor, action, details)
+         VALUES (?, ?, ?, ?)`
+        , [
+          bookingIdRaw,
+          "GA Admin",
+          `status-${gaStatus}`,
+          JSON.stringify({
+            gaDriverName,
+            gaDriverPhone,
+            gaVehicleId,
+            gaVehicleType: gaVehicleTypeRaw,
+            gaRejectReason: gaStatus === "rejected" ? gaRejectReason : null,
+          }),
+        ]
+      );
+
+      return NextResponse.json({
+        success: true,
+        bookingId: bookingIdRaw,
+        referenceCode,
+        gaStatus,
+      });
+    } catch (error) {
+      console.error("[bookings/rental] update error", error);
+      return NextResponse.json(
+        { error: error?.message || "ไม่สามารถอัปเดตสถานะการจองได้" },
+        { status: error?.status || 500 }
+      );
+    }
+  }
+
+  const referenceCode = generateReferenceCode();
   let bookingId;
   try {
     const insertResult = await query(
@@ -495,77 +859,7 @@ export async function POST(request) {
     if (!bookingId) {
       throw new Error("ไม่สามารถบันทึกข้อมูลการจองได้");
     }
-
-    await query(
-      `INSERT INTO booking_points (
-         booking_id,
-         point_type,
-         sequence_no,
-         travel_date,
-         depart_time,
-         arrive_time,
-         passenger_count,
-         passenger_names,
-         location_name,
-         district,
-         province,
-         flight_number,
-         flight_time,
-         note_to_driver
-       ) VALUES (?, 'pickup', ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`
-      , [
-        bookingId,
-        pickupPoint.sequenceNo,
-        pickupPoint.travelDate,
-        pickupPoint.departTime,
-        pickupPoint.passengerCount,
-        pickupPoint.passengerNames,
-        pickupPoint.locationName,
-        pickupPoint.district,
-        pickupPoint.province,
-        pickupPoint.flightNumber,
-        pickupPoint.flightTime,
-        pickupPoint.driverNote,
-      ]
-    );
-
-    await Promise.all(
-      dropOffPoints.map((point) =>
-        query(
-          `INSERT INTO booking_points (
-             booking_id,
-             point_type,
-             sequence_no,
-             travel_date,
-             depart_time,
-             arrive_time,
-             passenger_count,
-             passenger_names,
-             location_name,
-             district,
-             province,
-             flight_number,
-             flight_time,
-             note_to_driver
-           ) VALUES (?, 'dropoff', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-          , [
-            bookingId,
-            point.sequenceNo,
-            point.travelDate,
-            point.departTime,
-            point.arriveTime,
-            point.passengerCount,
-            point.passengerNames,
-            point.locationName,
-            point.district,
-            point.province,
-            point.flightNumber,
-            point.flightTime,
-            point.driverNote,
-          ]
-        )
-      )
-    );
+    await syncBookingPoints(bookingId, pickupPoint, dropOffPoints);
 
     const notificationRecipients = Array.from(
       new Set([adminEmail, contactEmail, ...additionalEmails])
@@ -597,7 +891,13 @@ export async function POST(request) {
         replyTo: contactEmail,
       });
     } catch (mailError) {
-      const error = new Error("ไม่สามารถส่งอีเมลแจ้งเตือนผู้ดูแลระบบได้");
+      console.error("[bookings/rental] send mail failed", mailError);
+      const shouldRevealDetail =
+        process.env.NODE_ENV !== "production" && mailError?.message;
+      const errorMessage = shouldRevealDetail
+        ? `ไม่สามารถส่งอีเมลแจ้งเตือนผู้ดูแลระบบได้ (${mailError.message})`
+        : "ไม่สามารถส่งอีเมลแจ้งเตือนผู้ดูแลระบบได้";
+      const error = new Error(errorMessage);
       error.status = 502;
       error.cause = mailError;
       throw error;
