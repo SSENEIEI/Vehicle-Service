@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 import {
   FaCarSide,
   FaClipboardList,
@@ -8,6 +8,7 @@ import {
   FaFileLines,
   FaPaperPlane,
   FaPlus,
+  FaTrash,
 } from "react-icons/fa6";
 
 const colors = {
@@ -178,6 +179,39 @@ const formStyles = {
     fontSize: "16px",
     cursor: "pointer",
   },
+  attachmentList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+  },
+  attachmentItem: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "10px 14px",
+    borderRadius: "14px",
+    border: `1px solid ${colors.border}`,
+    backgroundColor: colors.accent,
+  },
+  attachmentName: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    color: colors.textDark,
+    fontWeight: "600",
+  },
+  removeAttachmentButton: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    padding: "8px 12px",
+    borderRadius: "12px",
+    border: "none",
+    backgroundColor: "#e35b5b",
+    color: "#ffffff",
+    fontWeight: "600",
+    cursor: "pointer",
+  },
 };
 
 const createEmptyCostItem = () => ({
@@ -201,6 +235,9 @@ const formatCurrency = (value) => {
 
 export default function RepairReportForm() {
   const [costItems, setCostItems] = useState([createEmptyCostItem()]);
+  const [attachments, setAttachments] = useState([]);
+  const fileInputRef = useRef(null);
+  const fileInputId = useId();
 
   const handleCostItemChange = (id, field, value) => {
     setCostItems((prev) =>
@@ -210,6 +247,25 @@ export default function RepairReportForm() {
 
   const addCostItem = () => {
     setCostItems((prev) => [...prev, createEmptyCostItem()]);
+  };
+
+  const openFilePicker = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleAttachmentsAdded = (event) => {
+    const selectedFiles = Array.from(event.target.files || []);
+    if (!selectedFiles.length) {
+      return;
+    }
+    setAttachments((prev) => [...prev, ...selectedFiles]);
+    event.target.value = "";
+  };
+
+  const removeAttachment = (index) => {
+    setAttachments((prev) => prev.filter((_, position) => position !== index));
   };
 
   const calculateRowTotal = (item) => {
@@ -378,15 +434,51 @@ export default function RepairReportForm() {
           <FaPaperclip size={18} /> เอกสารแนบแจ้งซ่อม
         </div>
         <div style={formStyles.attachmentRow}>
-          <label style={{ ...formStyles.fileInput, display: "flex", alignItems: "center" }}>
+          <input
+            id={fileInputId}
+            ref={fileInputRef}
+            type="file"
+            multiple
+            style={{ display: "none" }}
+            onChange={handleAttachmentsAdded}
+          />
+          <label
+            htmlFor={fileInputId}
+            style={{ ...formStyles.fileInput, display: "flex", alignItems: "center" }}
+          >
             <span style={formStyles.iconLabel}>
               <FaPaperclip /> เพิ่มไฟล์แนบ (PDF / Excel / Word)
             </span>
           </label>
-          <button type="button" style={formStyles.addLineButton}>
+          <button
+            type="button"
+            style={formStyles.addLineButton}
+            onClick={openFilePicker}
+          >
             <FaPlus size={14} /> เพิ่ม
           </button>
         </div>
+        {!!attachments.length && (
+          <div style={formStyles.attachmentList}>
+            {attachments.map((file, index) => (
+              <div style={formStyles.attachmentItem} key={`${file.name}-${file.lastModified}-${index}`}>
+                <div style={formStyles.attachmentName}>
+                  <FaFileLines size={16} />
+                  <span>
+                    {file.name} ({formatCurrency(file.size / 1000)} KB)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  style={formStyles.removeAttachmentButton}
+                  onClick={() => removeAttachment(index)}
+                >
+                  <FaTrash size={14} /> ลบ
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={formStyles.submitRow}>
