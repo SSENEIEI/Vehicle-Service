@@ -7,7 +7,7 @@ const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function generateReferenceCode() {
   const timePart = Date.now().toString(36).toUpperCase();
   const randomPart = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `CB-${timePart}${randomPart}`;
+  return `RB-${timePart}${randomPart}`;
 }
 
 function sanitizeEmail(value) {
@@ -184,7 +184,7 @@ export async function GET(request) {
          INNER JOIN divisions d ON d.id = b.division_id
          INNER JOIN departments dept ON dept.id = b.department_id
          WHERE b.id = ?
-           AND b.booking_type = 'company'
+           AND b.booking_type = 'rental'
          LIMIT 1`,
         [bookingId]
       );
@@ -207,23 +207,23 @@ export async function GET(request) {
       );
 
       const pointRows = await query(
-  `SELECT id,
-    point_type,
-    sequence_no,
-    travel_date,
-    depart_time,
-    arrive_time,
-    passenger_count,
-    passenger_names,
-    location_name,
-    district,
-    province,
-    flight_number,
-    flight_time,
-    note_to_driver
-   FROM booking_points
-   WHERE booking_id = ?
-   ORDER BY CASE WHEN point_type = 'pickup' THEN 0 ELSE 1 END, sequence_no ASC`,
+        `SELECT id,
+                point_type,
+                sequence_no,
+                travel_date,
+                depart_time,
+                arrive_time,
+                passenger_count,
+                passenger_names,
+                location_name,
+                district,
+                province,
+                flight_number,
+                flight_time,
+                note_to_driver
+         FROM booking_points
+         WHERE booking_id = ?
+         ORDER BY CASE WHEN point_type = 'pickup' THEN 0 ELSE 1 END, sequence_no ASC`,
         [bookingId]
       );
 
@@ -270,7 +270,7 @@ export async function GET(request) {
       return invalidResponse("สถานะที่ระบุไม่ถูกต้อง", 400);
     }
 
-    const whereClauses = ["b.booking_type = 'company'"];
+    const whereClauses = ["b.booking_type = 'rental'"];
     const params = [];
     if (status !== "all") {
       whereClauses.push("b.ga_status = ?");
@@ -281,19 +281,19 @@ export async function GET(request) {
 
     const bookings = await query(
       `SELECT b.id,
-        b.reference_code AS referenceCode,
-        b.requester_emp_no AS requesterEmpNo,
-        b.requester_name AS requesterName,
-        b.contact_phone AS contactPhone,
-        b.contact_email AS contactEmail,
-        b.factory_id AS factoryId,
-        b.division_id AS divisionId,
-        b.department_id AS departmentId,
-        b.ga_status AS gaStatus,
-        b.created_at AS createdAt,
-        f.name AS factoryName,
-        d.name AS divisionName,
-        dept.name AS departmentName
+              b.reference_code AS referenceCode,
+              b.requester_emp_no AS requesterEmpNo,
+              b.requester_name AS requesterName,
+              b.contact_phone AS contactPhone,
+              b.contact_email AS contactEmail,
+              b.factory_id AS factoryId,
+              b.division_id AS divisionId,
+              b.department_id AS departmentId,
+              b.ga_status AS gaStatus,
+              b.created_at AS createdAt,
+              f.name AS factoryName,
+              d.name AS divisionName,
+              dept.name AS departmentName
        FROM bookings b
        INNER JOIN factories f ON f.id = b.factory_id
        INNER JOIN divisions d ON d.id = b.division_id
@@ -306,7 +306,7 @@ export async function GET(request) {
 
     return NextResponse.json({ bookings });
   } catch (error) {
-    console.error("[bookings/company] GET error", error);
+    console.error("[bookings/rental] GET error", error);
     return NextResponse.json(
       { error: "ไม่สามารถโหลดข้อมูลการจองได้" },
       { status: 500 }
@@ -374,7 +374,7 @@ export async function POST(request) {
     )
   );
 
-  let adminEmail = sanitizeEmail(process.env.BOOKING_ADMIN_EMAIL || process.env.ADMIN_EMAIL);
+  let adminEmail = sanitizeEmail(process.env.BOOKING_RENTAL_ADMIN_EMAIL || process.env.BOOKING_ADMIN_EMAIL || process.env.ADMIN_EMAIL);
   if (!adminEmail) {
     try {
       const [adminRow] = await query(
@@ -386,11 +386,11 @@ export async function POST(request) {
       );
       adminEmail = sanitizeEmail(adminRow?.email);
     } catch (lookupError) {
-      console.error("[bookings/company] admin email lookup failed", lookupError);
+      console.error("[bookings/rental] admin email lookup failed", lookupError);
     }
   }
   if (!adminEmail) {
-    return invalidResponse("ยังไม่ได้กำหนดอีเมลผู้ดูแลระบบ (BOOKING_ADMIN_EMAIL หรือ ADMIN_EMAIL)", 500);
+    return invalidResponse("ยังไม่ได้กำหนดอีเมลผู้ดูแลระบบ (BOOKING_RENTAL_ADMIN_EMAIL หรือ BOOKING_ADMIN_EMAIL หรือ ADMIN_EMAIL)", 500);
   }
 
   const smtpHost = process.env.SMTP_HOST;
@@ -470,19 +470,19 @@ export async function POST(request) {
          ga_status,
          ga_reject_reason,
          created_by
-       ) VALUES (?, 'company', ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 'pending', NULL, ?)`
-        , [
-          referenceCode,
-          employeeId,
-          requesterName,
-          factoryId,
-          divisionId,
-          departmentId,
-          contactPhone,
-          contactEmail,
-          cargoDetails || null,
-          requesterName,
-        ]
+       ) VALUES (?, 'rental', ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 'pending', NULL, ?)`
+      , [
+        referenceCode,
+        employeeId,
+        requesterName,
+        factoryId,
+        divisionId,
+        departmentId,
+        contactPhone,
+        contactEmail,
+        cargoDetails || null,
+        requesterName,
+      ]
     );
 
     bookingId = insertResult?.insertId;
@@ -569,7 +569,7 @@ export async function POST(request) {
 
     const messageLines = [
       "รายงานผู้ดูแลระบบ",
-      "มีผู้ประสงค์ จองรถ",
+      "มีผู้ประสงค์ จองรถเช่า",
       `รหัสพนักงาน : ${employeeId}`,
       `ชื่อผู้จอง : ${requesterName}`,
       `โรงงาน : ${organization.factoryName}`,
@@ -587,7 +587,7 @@ export async function POST(request) {
         from: fromAddress,
         to: adminEmail,
         cc: ccRecipients.length ? ccRecipients : undefined,
-        subject: `แจ้งเตือนการจองรถบริษัท (${referenceCode})`,
+        subject: `แจ้งเตือนการจองรถเช่า (${referenceCode})`,
         text: messageLines.join("\n"),
         replyTo: contactEmail,
       });
@@ -626,10 +626,10 @@ export async function POST(request) {
       try {
         await query("DELETE FROM bookings WHERE id = ?", [bookingId]);
       } catch (cleanupError) {
-        console.error("[bookings/company] cleanup error", cleanupError);
+        console.error("[bookings/rental] cleanup error", cleanupError);
       }
     }
-    console.error("[bookings/company] POST error", error);
+    console.error("[bookings/rental] POST error", error);
     return NextResponse.json(
       { error: error?.message || "ไม่สามารถบันทึกการจองได้" },
       { status: error?.status || 500 }
