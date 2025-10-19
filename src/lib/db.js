@@ -212,6 +212,94 @@ export async function initDatabase({ seed = true } = {}) {
     `);
 
     await exec(`
+      CREATE TABLE IF NOT EXISTS bookings (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        reference_code VARCHAR(32) NOT NULL UNIQUE,
+        booking_type ENUM('company', 'rental') NOT NULL,
+        requester_emp_no VARCHAR(32) NOT NULL,
+        requester_name VARCHAR(120) NOT NULL,
+        factory_id INT NOT NULL,
+        division_id INT NOT NULL,
+        department_id INT NOT NULL,
+        contact_phone VARCHAR(32) NOT NULL,
+        contact_email VARCHAR(160) NOT NULL,
+        cargo_details TEXT NULL,
+        ga_driver_name VARCHAR(120) NULL,
+        ga_driver_phone VARCHAR(32) NULL,
+        ga_vehicle_id INT NULL,
+        ga_vehicle_type VARCHAR(80) NULL,
+        ga_status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+        ga_reject_reason TEXT NULL,
+        created_by VARCHAR(64) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        CONSTRAINT fk_bookings_factory FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE RESTRICT,
+        CONSTRAINT fk_bookings_division FOREIGN KEY (division_id) REFERENCES divisions(id) ON DELETE RESTRICT,
+        CONSTRAINT fk_bookings_department FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE RESTRICT,
+        CONSTRAINT fk_bookings_vehicle FOREIGN KEY (ga_vehicle_id) REFERENCES company_vehicles(id) ON DELETE SET NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await exec(`
+      CREATE TABLE IF NOT EXISTS booking_points (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        booking_id BIGINT UNSIGNED NOT NULL,
+        point_type ENUM('pickup', 'dropoff') NOT NULL,
+        sequence_no INT UNSIGNED NOT NULL,
+        travel_date DATE NULL,
+        depart_time TIME NULL,
+        arrive_time TIME NULL,
+        passenger_count SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+        passenger_names TEXT NULL,
+        location_name VARCHAR(255) NOT NULL,
+        district VARCHAR(120) NOT NULL,
+        province VARCHAR(120) NOT NULL,
+        flight_number VARCHAR(40) NULL,
+        flight_time TIME NULL,
+        note_to_driver TEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_booking_points_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+        UNIQUE KEY uniq_booking_point_order (booking_id, point_type, sequence_no)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await exec(`
+      CREATE TABLE IF NOT EXISTS booking_files (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        booking_id BIGINT UNSIGNED NOT NULL,
+        original_name VARCHAR(255) NOT NULL,
+        stored_name VARCHAR(255) NOT NULL,
+        mime_type VARCHAR(120) NOT NULL,
+        file_size INT UNSIGNED NOT NULL,
+        uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_booking_files_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await exec(`
+      CREATE TABLE IF NOT EXISTS booking_notifications (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        booking_id BIGINT UNSIGNED NOT NULL,
+        email VARCHAR(160) NOT NULL,
+        notified_at TIMESTAMP NULL,
+        CONSTRAINT fk_booking_notifications_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+        UNIQUE KEY uniq_booking_email (booking_id, email)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await exec(`
+      CREATE TABLE IF NOT EXISTS booking_history (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        booking_id BIGINT UNSIGNED NOT NULL,
+        actor VARCHAR(120) NOT NULL,
+        action VARCHAR(80) NOT NULL,
+        details TEXT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT fk_booking_history_booking FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await exec(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
         username VARCHAR(50) NOT NULL UNIQUE,
