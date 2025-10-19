@@ -300,6 +300,27 @@ export async function initDatabase({ seed = true } = {}) {
     `);
 
     await exec(`
+      CREATE TABLE IF NOT EXISTS repair_requests (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        repair_code VARCHAR(16) NOT NULL UNIQUE,
+        vehicle_registration VARCHAR(50) NOT NULL,
+        vehicle_type VARCHAR(80) NULL,
+        priority_level VARCHAR(30) NULL,
+        issue_description TEXT NOT NULL,
+        report_date DATE NOT NULL,
+        eta_date DATE NULL,
+        cost_items JSON NULL,
+        subtotal DECIMAL(12,2) NOT NULL DEFAULT 0,
+        vat_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+        net_total DECIMAL(12,2) NOT NULL DEFAULT 0,
+        attachments JSON NULL,
+        created_by VARCHAR(120) NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await exec(`
       CREATE TABLE IF NOT EXISTS users (
         id INT AUTO_INCREMENT PRIMARY KEY,
         username VARCHAR(50) NOT NULL UNIQUE,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   FaCarSide,
   FaClipboardList,
@@ -156,6 +156,7 @@ const formStyles = {
     fontSize: "15px",
     color: colors.textMuted,
     backgroundColor: colors.accent,
+    cursor: "pointer",
   },
   iconLabel: {
     display: "flex",
@@ -212,6 +213,16 @@ const formStyles = {
     fontWeight: "600",
     cursor: "pointer",
   },
+  errorText: {
+    marginTop: "6px",
+    fontSize: "14px",
+    color: "#d64545",
+  },
+  successText: {
+    marginTop: "6px",
+    fontSize: "14px",
+    color: colors.success,
+  },
 };
 
 const createEmptyCostItem = () => ({
@@ -233,11 +244,68 @@ const formatCurrency = (value) => {
   });
 };
 
+const formatFileSize = (bytes) => {
+  const size = Number(bytes) || 0;
+  if (size <= 0) {
+    return "0 B";
+  }
+  const units = ["B", "KB", "MB", "GB"];
+  let current = size;
+  let unitIndex = 0;
+  while (current >= 1024 && unitIndex < units.length - 1) {
+    current /= 1024;
+    unitIndex += 1;
+  }
+  const precision = unitIndex === 0 ? 0 : 2;
+  return `${current.toFixed(precision)} ${units[unitIndex]}`;
+};
+
 export default function RepairReportForm() {
+  const [repairCode, setRepairCode] = useState("");
+  const [isLoadingCode, setIsLoadingCode] = useState(false);
+  const [codeError, setCodeError] = useState("");
+  const [vehicleRegistration, setVehicleRegistration] = useState("");
+  const [vehicleType, setVehicleType] = useState("");
+  const [priorityLevel, setPriorityLevel] = useState("");
+  const [issueDescription, setIssueDescription] = useState("");
+  const [reportDate, setReportDate] = useState("");
+  const [etaDate, setEtaDate] = useState("");
   const [costItems, setCostItems] = useState([createEmptyCostItem()]);
   const [attachments, setAttachments] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitMessage, setSubmitMessage] = useState("");
+  const [submitError, setSubmitError] = useState("");
+
   const fileInputRef = useRef(null);
   const fileInputId = useId();
+
+  const fetchNextRepairCode = useCallback(async () => {
+    setIsLoadingCode(true);
+    setCodeError("");
+    try {
+      const response = await fetch("/api/repair/report/next-code", {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+      const payload = await response.json();
+      if (!payload?.nextCode) {
+        throw new Error("Missing nextCode in response");
+      }
+      setRepairCode(payload.nextCode);
+    } catch (error) {
+      console.error("Failed to fetch next repair code", error);
+      setRepairCode("");
+      setCodeError("ไม่สามารถสร้างเลขแจ้งซ่อมได้ กรุณาลองอีกครั้ง");
+    } finally {
+      setIsLoadingCode(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchNextRepairCode();
+  }, [fetchNextRepairCode]);
 
   const handleCostItemChange = (id, field, value) => {
     setCostItems((prev) =>
@@ -281,8 +349,102 @@ export default function RepairReportForm() {
   const vatAmount = subtotal * 0.07;
   const netTotal = subtotal + vatAmount;
 
+  const resetForm = () => {
+    setVehicleRegistration("");
+    setVehicleType("");
+    setPriorityLevel("");
+    setIssueDescription("");
+    setReportDate("");
+    setEtaDate("");
+    setCostItems([createEmptyCostItem()]);
+    setAttachments([]);
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    if (isSubmitting) {
+      return;
+    }
+
+    setSubmitError("");
+    setSubmitMessage("");
+
+    if (!repairCode) {
+      setSubmitError(codeError || "ระบบไม่สามารถสร้างเลขแจ้งซ่อมได้");
+      return;
+    }
+
+    if (!vehicleRegistration.trim()) {
+      setSubmitError("กรุณากรอกทะเบียนรถ");
+      return;
+    }
+
+    if (!issueDescription.trim()) {
+      setSubmitError("กรุณาระบุอาการ/ปัญหา");
+      return;
+    }
+
+    if (!reportDate) {
+      setSubmitError("กรุณาเลือกวันที่แจ้ง");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        repairCode,
+        vehicleRegistration: vehicleRegistration.trim(),
+        vehicleType: vehicleType.trim(),
+        priorityLevel: priorityLevel.trim(),
+        issueDescription: issueDescription.trim(),
+        reportDate,
+        etaDate: etaDate || null,
+        costItems: costItems.map((item) => ({
+          description: String(item.description || "").trim(),
+          quantity: Number(item.quantity) || 0,
+          unitPrice: Number(item.unitPrice) || 0,
+          note: String(item.note || "").trim(),
+          total: Number(calculateRowTotal(item).toFixed(2)),
+        })),
+        subtotal: Number(subtotal.toFixed(2)),
+        vatAmount: Number(vatAmount.toFixed(2)),
+        netTotal: Number(netTotal.toFixed(2)),
+        attachments: attachments.map((file) => ({
+          name: file.name,
+          size: file.size,
+          type: file.type,
+        })),
+      };
+
+      const response = await fetch("/api/repair/report", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || "ไม่สามารถบันทึกคำขอได้");
+      }
+
+      const result = await response.json();
+      setSubmitMessage(
+        `บันทึกคำขอซ่อมเรียบร้อย (เลขที่ ${result?.repairCode || repairCode})`
+      );
+      resetForm();
+      fetchNextRepairCode();
+    } catch (error) {
+      console.error("Failed to submit repair report", error);
+      setSubmitError(error.message || "เกิดข้อผิดพลาด กรุณาลองใหม่");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <div style={formStyles.wrapper}>
+    <form style={formStyles.wrapper} onSubmit={handleSubmit} noValidate>
       <div style={formStyles.headerCard}>
         <div style={formStyles.headerTitle}>
           <FaFileLines size={22} /> แบบฟอร์มแจ้งซ่อมรถ (แอดมิน)
@@ -299,17 +461,33 @@ export default function RepairReportForm() {
         <div style={formStyles.fieldGrid(3)}>
           <div style={formStyles.field}>
             <label style={formStyles.label}>เลขแจ้งซ่อม (อัตโนมัติ)</label>
-            <input style={formStyles.input} placeholder="ระบบจะสร้างอัตโนมัติ" readOnly />
+            <input
+              style={formStyles.input}
+              placeholder={isLoadingCode ? "กำลังสร้างเลข..." : "ระบบจะสร้างอัตโนมัติ"}
+              value={repairCode}
+              readOnly
+            />
+            {codeError && <p style={formStyles.errorText}>{codeError}</p>}
           </div>
           <div style={formStyles.field}>
             <label style={formStyles.label}>
               ทะเบียนรถ <span style={formStyles.required}>*</span>
             </label>
-            <input style={formStyles.input} placeholder="กรอกทะเบียนรถ" />
+            <input
+              style={formStyles.input}
+              placeholder="กรอกทะเบียนรถ"
+              value={vehicleRegistration}
+              onChange={(event) => setVehicleRegistration(event.target.value)}
+            />
           </div>
           <div style={formStyles.field}>
             <label style={formStyles.label}>ประเภทรถ</label>
-            <input style={formStyles.input} placeholder="เช่น รถตู้ / รถเก๋ง" />
+            <input
+              style={formStyles.input}
+              placeholder="เช่น รถตู้ / รถเก๋ง"
+              value={vehicleType}
+              onChange={(event) => setVehicleType(event.target.value)}
+            />
           </div>
         </div>
       </div>
@@ -322,22 +500,46 @@ export default function RepairReportForm() {
           <label style={formStyles.label}>
             อาการ/ปัญหา <span style={formStyles.required}>*</span>
           </label>
-          <textarea style={formStyles.textarea} placeholder="อธิบายอาการหรือปัญหาที่พบ" />
+          <textarea
+            style={formStyles.textarea}
+            placeholder="อธิบายอาการหรือปัญหาที่พบ"
+            value={issueDescription}
+            onChange={(event) => setIssueDescription(event.target.value)}
+          />
         </div>
         <div style={formStyles.fieldGrid(3)}>
           <div style={formStyles.field}>
             <label style={formStyles.label}>ระดับความสำคัญ</label>
-            <input style={formStyles.input} placeholder="เช่น สูง / กลาง / ต่ำ" />
+            <select
+              style={formStyles.input}
+              value={priorityLevel}
+              onChange={(event) => setPriorityLevel(event.target.value)}
+            >
+              <option value="">เลือกระดับความสำคัญ</option>
+              <option value="สูง">สูง</option>
+              <option value="ปานกลาง">ปานกลาง</option>
+              <option value="ต่ำ">ต่ำ</option>
+            </select>
           </div>
           <div style={formStyles.field}>
             <label style={formStyles.label}>
               วันที่แจ้ง <span style={formStyles.required}>*</span>
             </label>
-            <input type="date" style={formStyles.input} />
+            <input
+              type="date"
+              style={formStyles.input}
+              value={reportDate}
+              onChange={(event) => setReportDate(event.target.value)}
+            />
           </div>
           <div style={formStyles.field}>
             <label style={formStyles.label}>กำหนดแล้วเสร็จ (ETA)</label>
-            <input type="date" style={formStyles.input} />
+            <input
+              type="date"
+              style={formStyles.input}
+              value={etaDate}
+              onChange={(event) => setEtaDate(event.target.value)}
+            />
           </div>
         </div>
 
@@ -399,7 +601,12 @@ export default function RepairReportForm() {
             );
           })}
           <div style={{ marginTop: "12px" }}>
-            <button type="button" style={formStyles.addLineButton} onClick={addCostItem}>
+            <button
+              type="button"
+              style={formStyles.addLineButton}
+              onClick={addCostItem}
+              disabled={isSubmitting}
+            >
               <FaPlus size={14} /> เพิ่มรายการ
             </button>
           </div>
@@ -441,6 +648,7 @@ export default function RepairReportForm() {
             multiple
             style={{ display: "none" }}
             onChange={handleAttachmentsAdded}
+            disabled={isSubmitting}
           />
           <label
             htmlFor={fileInputId}
@@ -454,6 +662,7 @@ export default function RepairReportForm() {
             type="button"
             style={formStyles.addLineButton}
             onClick={openFilePicker}
+            disabled={isSubmitting}
           >
             <FaPlus size={14} /> เพิ่ม
           </button>
@@ -461,17 +670,18 @@ export default function RepairReportForm() {
         {!!attachments.length && (
           <div style={formStyles.attachmentList}>
             {attachments.map((file, index) => (
-              <div style={formStyles.attachmentItem} key={`${file.name}-${file.lastModified}-${index}`}>
+              <div style={formStyles.attachmentItem} key={`${file.name}-${file.lastModified || index}`}>
                 <div style={formStyles.attachmentName}>
                   <FaFileLines size={16} />
                   <span>
-                    {file.name} ({formatCurrency(file.size / 1000)} KB)
+                    {file.name} ({formatFileSize(file.size)})
                   </span>
                 </div>
                 <button
                   type="button"
                   style={formStyles.removeAttachmentButton}
                   onClick={() => removeAttachment(index)}
+                  disabled={isSubmitting}
                 >
                   <FaTrash size={14} /> ลบ
                 </button>
@@ -482,10 +692,20 @@ export default function RepairReportForm() {
       </div>
 
       <div style={formStyles.submitRow}>
-        <button type="button" style={formStyles.submitButton}>
-          <FaPaperPlane /> บันทึกแจ้งซ่อม
+        <button
+          type="submit"
+          style={{
+            ...formStyles.submitButton,
+            opacity: isSubmitting ? 0.65 : 1,
+            cursor: isSubmitting ? "not-allowed" : "pointer",
+          }}
+          disabled={isSubmitting}
+        >
+          <FaPaperPlane /> {isSubmitting ? "กำลังบันทึก..." : "บันทึกแจ้งซ่อม"}
         </button>
       </div>
-    </div>
+      {submitError && <p style={formStyles.errorText}>{submitError}</p>}
+      {submitMessage && <p style={formStyles.successText}>{submitMessage}</p>}
+    </form>
   );
 }
