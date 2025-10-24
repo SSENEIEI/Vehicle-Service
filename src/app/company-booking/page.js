@@ -589,6 +589,36 @@ function LabeledField({ label, required = false, children }) {
   );
 }
 
+const CUSTOM_DRIVER_VALUE = "__custom_driver__";
+
+const normalizePhoneNumber = (value) => (value ? String(value).replace(/\D/g, "") : "");
+
+function findDriverOptionId(drivers, name, phone) {
+  if (!Array.isArray(drivers) || !drivers.length) {
+    return "";
+  }
+  const normalizedName = (name || "").trim().toLowerCase();
+  const normalizedPhone = normalizePhoneNumber(phone || "");
+  if (!normalizedName && !normalizedPhone) {
+    return "";
+  }
+  const matchedDriver = drivers.find((driver) => {
+    const driverName = (driver.name || "").trim().toLowerCase();
+    const driverPhone = normalizePhoneNumber(driver.phone || "");
+    if (normalizedName && normalizedPhone) {
+      return driverName === normalizedName && driverPhone === normalizedPhone;
+    }
+    if (normalizedName) {
+      return driverName === normalizedName;
+    }
+    if (normalizedPhone) {
+      return driverPhone === normalizedPhone;
+    }
+    return false;
+  });
+  return matchedDriver ? String(matchedDriver.id) : "";
+}
+
 export default function CompanyBookingPage() {
   const router = useRouter();
   const pathname = usePathname();
@@ -636,6 +666,10 @@ export default function CompanyBookingPage() {
   const [gaDriverPhone, setGaDriverPhone] = useState("");
   const [gaStatus, setGaStatus] = useState("");
   const [gaRejectReason, setGaRejectReason] = useState("");
+  const [selectedDriverId, setSelectedDriverId] = useState("");
+  const [driverOptions, setDriverOptions] = useState([]);
+  const [driverOptionsError, setDriverOptionsError] = useState("");
+  const [isLoadingDrivers, setIsLoadingDrivers] = useState(false);
   const formRef = useRef(null);
   const bookingPickerRef = useRef(null);
 
@@ -804,6 +838,25 @@ export default function CompanyBookingPage() {
     }
   }, []);
 
+  const loadDriverOptions = useCallback(async () => {
+    setIsLoadingDrivers(true);
+    setDriverOptionsError("");
+    try {
+      const response = await fetchJSON("/api/company-assets/drivers");
+      const drivers = Array.isArray(response?.drivers) ? response.drivers : [];
+      setDriverOptions(drivers);
+      if (!drivers.length) {
+        setDriverOptionsError("ไม่พบข้อมูลพนักงานขับรถ");
+      }
+    } catch (error) {
+      console.error("โหลดข้อมูลพนักงานขับรถไม่สำเร็จ", error);
+      setDriverOptions([]);
+      setDriverOptionsError("ไม่สามารถโหลดรายชื่อพนักงานขับรถได้");
+    } finally {
+      setIsLoadingDrivers(false);
+    }
+  }, []);
+
   const loadPendingBookings = useCallback(async () => {
     if (!isAdmin) {
       return;
@@ -841,6 +894,10 @@ export default function CompanyBookingPage() {
     }
     setGaDriverName("");
     setGaDriverPhone("");
+    setDriverOptions([]);
+    setDriverOptionsError("");
+    setSelectedDriverId("");
+    setIsLoadingDrivers(false);
     setGaStatus("");
     setGaRejectReason("");
   }, [isAdmin]);
@@ -856,6 +913,13 @@ export default function CompanyBookingPage() {
     }
     loadVehicleOptions();
   }, [shouldLoadVehicleOptions, loadVehicleOptions]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      return;
+    }
+    loadDriverOptions();
+  }, [isAdmin, loadDriverOptions]);
 
   useEffect(() => {
     if (!gaVehicleId || gaVehicleType) {
@@ -900,6 +964,61 @@ export default function CompanyBookingPage() {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, [isAdmin, showBookingPicker]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      if (selectedDriverId) {
+        setSelectedDriverId("");
+      }
+      return;
+    }
+
+    const trimmedName = gaDriverName.trim();
+    const trimmedPhone = gaDriverPhone.trim();
+
+    if (!driverOptions.length) {
+      if ((trimmedName || trimmedPhone) && selectedDriverId !== CUSTOM_DRIVER_VALUE) {
+        setSelectedDriverId(CUSTOM_DRIVER_VALUE);
+      }
+      if (!trimmedName && !trimmedPhone && selectedDriverId) {
+        setSelectedDriverId("");
+      }
+      return;
+    }
+
+    const matchedDriverId = findDriverOptionId(driverOptions, trimmedName, trimmedPhone);
+    if (matchedDriverId) {
+      if (selectedDriverId !== matchedDriverId) {
+        setSelectedDriverId(matchedDriverId);
+      }
+      const matchedDriver = driverOptions.find((driver) => String(driver.id) === matchedDriverId);
+      if (matchedDriver) {
+        const resolvedName = matchedDriver.name || "";
+        const resolvedPhone = matchedDriver.phone || "";
+        if (gaDriverName !== resolvedName) {
+          setGaDriverName(resolvedName);
+        }
+        if (gaDriverPhone !== resolvedPhone) {
+          setGaDriverPhone(resolvedPhone);
+        }
+      }
+      return;
+    }
+
+    if (!trimmedName && !trimmedPhone) {
+      if (selectedDriverId === CUSTOM_DRIVER_VALUE) {
+        return;
+      }
+      if (selectedDriverId) {
+        setSelectedDriverId("");
+      }
+      return;
+    }
+
+    if (selectedDriverId !== CUSTOM_DRIVER_VALUE) {
+      setSelectedDriverId(CUSTOM_DRIVER_VALUE);
+    }
+  }, [isAdmin, driverOptions, gaDriverName, gaDriverPhone, selectedDriverId]);
   let welcomeText;
   if (normalizedRole === "admin") {
     welcomeText = "ผู้ดูแลระบบ";
@@ -1091,6 +1210,7 @@ export default function CompanyBookingPage() {
     });
     setGaVehicleId("");
     setGaVehicleType("");
+    setSelectedDriverId("");
     setIsLoadingBookingDetail(true);
     setPendingBookingsError("");
     try {
@@ -1264,6 +1384,7 @@ export default function CompanyBookingPage() {
         setCargoDetails("");
         setGaDriverName("");
         setGaDriverPhone("");
+        setSelectedDriverId("");
         setGaVehicleId("");
         setGaVehicleType("");
         setGaStatus("");
@@ -1277,6 +1398,7 @@ export default function CompanyBookingPage() {
         setCargoDetails(payload.cargoDetails || "");
         setGaDriverName("");
         setGaDriverPhone("");
+  setSelectedDriverId("");
         setGaVehicleId("");
         setGaVehicleType("");
         setGaStatus("");
@@ -1959,15 +2081,58 @@ export default function CompanyBookingPage() {
               </p>
               <div style={styles.formGrid(3)}>
                 <LabeledField label="ยืนยันพนักงานขับรถ" required>
-                  <input
+                  <select
                     style={styles.input}
-                    name="gaDriverName"
-                    value={gaDriverName}
-                    onChange={(event) => setGaDriverName(event.target.value)}
-                    disabled={!isAdmin}
+                    name="gaDriverSelection"
+                    value={selectedDriverId}
+                    onChange={(event) => {
+                      const { value } = event.target;
+                      setSelectedDriverId(value);
+                      if (!value) {
+                        setGaDriverName("");
+                        setGaDriverPhone("");
+                        return;
+                      }
+                      if (value === CUSTOM_DRIVER_VALUE) {
+                        setGaDriverName("");
+                        setGaDriverPhone("");
+                        return;
+                      }
+                      const matchedDriver = driverOptions.find((driver) => String(driver.id) === value);
+                      if (matchedDriver) {
+                        setGaDriverName(matchedDriver.name || "");
+                        setGaDriverPhone(matchedDriver.phone || "");
+                      } else {
+                        setGaDriverName("");
+                        setGaDriverPhone("");
+                      }
+                    }}
+                    disabled={!isAdmin || isLoadingDrivers}
                     required={isAdmin}
-                  />
+                  >
+                    <option value="">
+                      {isLoadingDrivers ? "กำลังโหลดข้อมูล..." : "เลือกพนักงานขับรถ"}
+                    </option>
+                    {driverOptions.map((driver) => (
+                      <option key={driver.id} value={String(driver.id)}>
+                        {driver.name}
+                      </option>
+                    ))}
+                    <option value={CUSTOM_DRIVER_VALUE}>กรอกชื่อพนักงานขับรถเอง</option>
+                  </select>
                 </LabeledField>
+                {selectedDriverId === CUSTOM_DRIVER_VALUE ? (
+                  <LabeledField label="ชื่อพนักงานขับรถ (กรอกเอง)" required>
+                    <input
+                      style={styles.input}
+                      name="gaDriverName"
+                      value={gaDriverName}
+                      onChange={(event) => setGaDriverName(event.target.value)}
+                      disabled={!isAdmin}
+                      required={isAdmin}
+                    />
+                  </LabeledField>
+                ) : null}
                 <LabeledField label="เบอร์โทรพนักงานขับรถ" required>
                   <input
                     style={styles.input}
@@ -2003,6 +2168,7 @@ export default function CompanyBookingPage() {
                   />
                 </LabeledField>
               </div>
+              {driverOptionsError ? <p style={styles.errorText}>{driverOptionsError}</p> : null}
             </section>
             <div style={styles.formFooter}>
               {formError ? <p style={styles.errorText}>{formError}</p> : null}
