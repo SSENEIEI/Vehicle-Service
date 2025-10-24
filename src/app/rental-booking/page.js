@@ -356,6 +356,11 @@ const styles = {
     justifyContent: "space-between",
     alignItems: "center",
   },
+  pointHeaderActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+  },
   pointTitle: {
     margin: 0,
     fontSize: "17px",
@@ -419,6 +424,16 @@ const styles = {
     fontSize: "13px",
     color: colors.textLight,
     marginTop: "6px",
+  },
+  removePointButton: {
+    padding: "8px 14px",
+    borderRadius: "14px",
+    border: "1.5px solid #d24c5a",
+    backgroundColor: "#ffffff",
+    color: "#d24c5a",
+    fontSize: "14px",
+    fontWeight: "700",
+    cursor: "pointer",
   },
   errorText: {
     margin: "0 0 12px",
@@ -895,6 +910,22 @@ export default function RentalBookingPage() {
 
   const handleAddDropOffPoint = () => {
     setDropOffPointForms((prev) => [...prev, createEmptyDropOffPoint(prev.length + 1)]);
+  };
+
+  const handleRemoveDropOffPoint = (index) => {
+    if (index <= 0) {
+      return;
+    }
+    setDropOffPointForms((prev) => {
+      if (prev.length <= 1) {
+        return prev;
+      }
+      const next = prev.filter((_, idx) => idx !== index);
+      return next.map((point, idx) => ({
+        ...point,
+        sequenceNo: idx + 1,
+      }));
+    });
   };
 
   const handleEmployeeIdChange = (event) => {
@@ -1676,7 +1707,18 @@ export default function RentalBookingPage() {
                       <div style={styles.pointHeaderBlock}>
                         <div style={styles.pointHeaderRow}>
                           <h4 style={styles.pointTitle}>{title}</h4>
-                          <span style={styles.pointNote}>ข้อมูลจุดรับผู้โดยสาร</span>
+                          <div style={styles.pointHeaderActions}>
+                            <span style={styles.pointNote}>ข้อมูลจุดรับผู้โดยสาร</span>
+                            {index > 0 ? (
+                              <button
+                                type="button"
+                                style={styles.removePointButton}
+                                onClick={() => handleRemoveDropOffPoint(index)}
+                              >
+                                ลบปลายทางนี้
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
                         <div style={styles.pointTabs}>
                           <span style={styles.pointTab(true)}>ปลายทาง</span>
