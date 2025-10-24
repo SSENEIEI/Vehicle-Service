@@ -212,6 +212,21 @@ export async function initDatabase({ seed = true } = {}) {
     `);
 
     await exec(`
+      CREATE TABLE IF NOT EXISTS repair_garages (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(180) NOT NULL,
+        contact_name VARCHAR(150) NULL,
+        phone VARCHAR(50) NULL,
+        email VARCHAR(150) NULL,
+        address TEXT NULL,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_repair_garage_name (name)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await exec(`
       CREATE TABLE IF NOT EXISTS bookings (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         reference_code VARCHAR(32) NOT NULL UNIQUE,

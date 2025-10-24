@@ -93,6 +93,19 @@ CREATE TABLE IF NOT EXISTS `company_vehicles` (
   UNIQUE KEY `uniq_vehicle_registration` (`registration`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS `repair_garages` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `name` VARCHAR(180) NOT NULL,
+  `contact_name` VARCHAR(150) NULL,
+  `phone` VARCHAR(50) NULL,
+  `email` VARCHAR(150) NULL,
+  `address` TEXT NULL,
+  `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `uniq_repair_garage_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 INSERT INTO `users` (`username`, `password_hash`, `email`, `role`, `status`)
 VALUES ('gaservice', '$2b$10$R9ObxUutkMVUUG6qKIHAYuG5RZT0xG9WuWo9mhHd/95AJO1TW9Kg2', NULL, 'admin', 'active')
 ON DUPLICATE KEY UPDATE
