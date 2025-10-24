@@ -258,12 +258,12 @@ const formatDateLabel = (value) => {
   return `${day}-${month}-${year}`;
 };
 
-const computeDurationLabel = (reportDate, completedDate) => {
-  if (!reportDate) {
+const computeDurationLabel = (startDate, endDate) => {
+  if (!startDate || !endDate) {
     return '-';
   }
-  const start = new Date(reportDate);
-  const end = completedDate ? new Date(completedDate) : new Date();
+  const start = new Date(startDate);
+  const end = new Date(endDate);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
     return '-';
   }
@@ -271,9 +271,8 @@ const computeDurationLabel = (reportDate, completedDate) => {
   if (diffMs < 0) {
     return '-';
   }
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  const totalDays = diffDays + 1;
-  return completedDate ? `${totalDays} วัน` : `${totalDays} วัน (ดำเนินการ)`;
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1;
+  return `${diffDays} วัน`;
 };
 
 const formatCurrency = (value) => currencyFormatter.format(Number(value) || 0);
@@ -496,7 +495,6 @@ export default function RepairTrackingClient() {
               repairs.map((row) => {
                 const statusMeta = statusByKey(statusInfo, row.status);
                 const priorityMeta = priorityStyle(row.priorityLevel);
-                const completedLabel = row.completedDate || row.etaDate;
                 const hasActiveGarage = row.garageId
                   ? garages.some((garage) => Number(garage.id) === Number(row.garageId))
                   : false;
@@ -549,9 +547,9 @@ export default function RepairTrackingClient() {
                       </select>
                     </td>
                     <td style={layoutStyles.tableCell}>{formatDateLabel(row.reportDate)}</td>
-                    <td style={layoutStyles.tableCell}>{formatDateLabel(completedLabel)}</td>
+                    <td style={layoutStyles.tableCell}>{formatDateLabel(row.etaDate)}</td>
                     <td style={layoutStyles.tableCell}>
-                      {computeDurationLabel(row.reportDate, row.completedDate)}
+                      {computeDurationLabel(row.reportDate, row.etaDate)}
                     </td>
                     <td style={layoutStyles.tableCell}>{formatCurrency(row.netTotal)}</td>
                   </tr>
