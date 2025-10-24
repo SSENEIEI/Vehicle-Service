@@ -632,6 +632,9 @@ export default function RentalBookingPage() {
   const [isLoadingVehicles, setIsLoadingVehicles] = useState(false);
   const [gaVehicleId, setGaVehicleId] = useState("");
   const [gaVehicleType, setGaVehicleType] = useState("");
+  const [rentalCompany, setRentalCompany] = useState("");
+  const [rentalCost, setRentalCost] = useState("");
+  const [rentalPaymentType, setRentalPaymentType] = useState("");
   const [gaDriverName, setGaDriverName] = useState("");
   const [gaDriverPhone, setGaDriverPhone] = useState("");
   const [gaStatus, setGaStatus] = useState("");
@@ -844,6 +847,9 @@ export default function RentalBookingPage() {
       setVehicleOptionsError("");
       setGaVehicleId("");
       setGaVehicleType("");
+      setRentalCompany("");
+      setRentalCost("");
+      setRentalPaymentType("");
       setGaDriverName("");
       setGaDriverPhone("");
       setGaStatus("");
@@ -1160,6 +1166,13 @@ export default function RentalBookingPage() {
   const normalizedStatus = detailData.gaStatus ? String(detailData.gaStatus).toLowerCase() : "";
   setGaStatus(normalizedStatus === "pending" ? "" : normalizedStatus);
       setGaRejectReason(detailData.gaRejectReason || "");
+      setRentalCompany(detailData.rentalCompany || "");
+      setRentalCost(
+        detailData.rentalCost !== null && detailData.rentalCost !== undefined
+          ? String(detailData.rentalCost)
+          : ""
+      );
+      setRentalPaymentType(detailData.rentalPaymentType || "");
     } catch (error) {
       console.error("โหลดรายละเอียดการจองไม่สำเร็จ", error);
       setPendingBookingsError("ไม่สามารถโหลดรายละเอียดการจองได้");
@@ -1216,6 +1229,9 @@ export default function RentalBookingPage() {
         .filter((email) => email.length > 0),
       pickupPoint: pickupPayload,
       dropOffPoints: dropOffPayload,
+  rentalCompany: rentalCompany.trim(),
+  rentalCost: rentalCost.trim(),
+      rentalPaymentType,
       gaDriverName: gaDriverName.trim(),
       gaDriverPhone: gaDriverPhone.trim(),
       gaVehicleId,
@@ -1257,6 +1273,9 @@ export default function RentalBookingPage() {
         setGaDriverPhone("");
         setGaVehicleId("");
         setGaVehicleType("");
+        setRentalCompany("");
+        setRentalCost("");
+        setRentalPaymentType("");
         setGaStatus("");
         setGaRejectReason("");
       } else {
@@ -1270,6 +1289,9 @@ export default function RentalBookingPage() {
   setGaDriverPhone("");
   setGaVehicleId("");
   setGaVehicleType("");
+  setRentalCompany("");
+  setRentalCost("");
+  setRentalPaymentType("");
   setGaStatus("");
   setGaRejectReason("");
         if (result?.referenceCode) {
@@ -1948,6 +1970,43 @@ export default function RentalBookingPage() {
                         {type}
                       </option>
                     ))}
+                  </select>
+                </LabeledField>
+                <LabeledField label="บริษัทรถเช่า" required>
+                  <input
+                    style={styles.input}
+                    name="rentalCompany"
+                    value={rentalCompany}
+                    onChange={(event) => setRentalCompany(event.target.value)}
+                    disabled={!isAdmin}
+                    required={isAdmin}
+                  />
+                </LabeledField>
+                <LabeledField label="ค่าใช้จ่ายรถเช่า" required>
+                  <input
+                    style={styles.input}
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    name="rentalCost"
+                    value={rentalCost}
+                    onChange={(event) => setRentalCost(event.target.value)}
+                    disabled={!isAdmin}
+                    required={isAdmin}
+                  />
+                </LabeledField>
+                <LabeledField label="ประเภทการจ่าย" required>
+                  <select
+                    style={styles.input}
+                    name="rentalPaymentType"
+                    value={rentalPaymentType}
+                    onChange={(event) => setRentalPaymentType(event.target.value)}
+                    disabled={!isAdmin}
+                    required={isAdmin}
+                  >
+                    <option value="">เลือก</option>
+                    <option value="credit_term">Credit term</option>
+                    <option value="advance">Advance</option>
                   </select>
                 </LabeledField>
                 <LabeledField label="สถานะการจอง" required>

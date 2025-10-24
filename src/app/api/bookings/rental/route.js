@@ -307,8 +307,44 @@ function invalidResponse(message, status = 400) {
   return NextResponse.json({ error: message }, { status });
 }
 
+async function ensureRentalSupportColumns() {
+  const rows = await query(
+    `SELECT COLUMN_NAME AS columnName
+       FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'bookings'
+        AND COLUMN_NAME IN ('rental_company', 'rental_cost', 'rental_payment_type')`
+  );
+
+  const existing = new Set(
+    rows.map((row) => String(row?.columnName || row?.COLUMN_NAME || "").toLowerCase())
+  );
+
+  if (!existing.has("rental_company")) {
+    await query(
+      `ALTER TABLE bookings
+       ADD COLUMN rental_company VARCHAR(180) NULL AFTER contact_email`
+    );
+  }
+
+  if (!existing.has("rental_cost")) {
+    await query(
+      `ALTER TABLE bookings
+       ADD COLUMN rental_cost DECIMAL(12,2) NULL AFTER rental_company`
+    );
+  }
+
+  if (!existing.has("rental_payment_type")) {
+    await query(
+      `ALTER TABLE bookings
+       ADD COLUMN rental_payment_type VARCHAR(60) NULL AFTER rental_cost`
+    );
+  }
+}
+
 export async function GET(request) {
   await initDatabase();
+  await ensureRentalSupportColumns();
   const { searchParams } = new URL(request.url);
   const idParam = searchParams.get("id");
   const statusParam = searchParams.get("status");
@@ -331,6 +367,9 @@ export async function GET(request) {
                 b.contact_phone AS contactPhone,
                 b.contact_email AS contactEmail,
                 b.cargo_details AS cargoDetails,
+                b.rental_company AS rentalCompany,
+                b.rental_cost AS rentalCost,
+                b.rental_payment_type AS rentalPaymentType,
                 b.ga_driver_name AS gaDriverName,
                 b.ga_driver_phone AS gaDriverPhone,
                 b.ga_vehicle_id AS gaVehicleId,
@@ -478,6 +517,7 @@ export async function GET(request) {
 
 export async function POST(request) {
   await initDatabase();
+  await ensureRentalSupportColumns();
 
   let body;
   try {
@@ -498,6 +538,23 @@ export async function POST(request) {
   const contactEmail = sanitizeEmail(body?.contactEmail);
   const cargoDetails = String(body?.cargoDetails || "").trim();
   const additionalEmailsRaw = Array.isArray(body?.additionalEmails) ? body.additionalEmails : [];
+
+  const rentalCompany = String(body?.rentalCompany || "").trim();
+  const rentalPaymentTypeRaw = String(body?.rentalPaymentType || "").trim().toLowerCase();
+  const allowedPaymentTypes = new Set(["credit_term", "advance"]);
+  const rentalPaymentType = allowedPaymentTypes.has(rentalPaymentTypeRaw)
+    ? rentalPaymentTypeRaw
+    : "";
+  const rentalCostInput = body?.rentalCost;
+  let rentalCost = null;
+  if (rentalCostInput !== null && rentalCostInput !== undefined && String(rentalCostInput).trim() !== "") {
+    const sanitizedCost = String(rentalCostInput).replace(/,/g, "").trim();
+    const parsedCost = Number.parseFloat(sanitizedCost);
+    if (!Number.isFinite(parsedCost) || parsedCost < 0) {
+      return invalidResponse("ค่าใช้จ่ายรถเช่าต้องเป็นจำนวนที่ไม่ติดลบ");
+    }
+    rentalCost = Number.parseFloat(parsedCost.toFixed(2));
+  }
 
   const gaDriverName = String(body?.gaDriverName || "").trim();
   const gaDriverPhone = String(body?.gaDriverPhone || "").trim();
@@ -548,6 +605,15 @@ export async function POST(request) {
     }
     if (!gaVehicleTypeRaw) {
       return invalidResponse("กรุณาระบุประเภทรถ");
+    }
+    if (!rentalCompany) {
+      return invalidResponse("กรุณาระบุบริษัทรถเช่า");
+    }
+    if (rentalCost === null) {
+      return invalidResponse("กรุณาระบุค่าใช้จ่ายรถเช่า");
+    }
+    if (!rentalPaymentType) {
+      return invalidResponse("กรุณาเลือกประเภทการจ่ายค่ารถเช่า");
     }
     if (gaStatus === "rejected" && !gaRejectReason) {
       return invalidResponse("กรุณาระบุเหตุผลการไม่อนุมัติ");
@@ -672,6 +738,9 @@ export async function POST(request) {
                contact_phone = ?,
                contact_email = ?,
                cargo_details = ?,
+               rental_company = ?,
+               rental_cost = ?,
+               rental_payment_type = ?,
                ga_driver_name = ?,
                ga_driver_phone = ?,
                ga_vehicle_id = ?,
@@ -688,6 +757,9 @@ export async function POST(request) {
           contactPhone,
           contactEmail,
           cargoDetails || null,
+          rentalCompany || null,
+          rentalCost,
+          rentalPaymentType || null,
           gaDriverName || null,
           gaDriverPhone || null,
           gaVehicleId,
@@ -719,6 +791,13 @@ export async function POST(request) {
 
       const referenceCode = existingBooking.reference_code;
       const statusLabel = gaStatus === "approved" ? "อนุมัติ" : "ไม่อนุมัติ";
+      const rentalCostLabel = rentalCost !== null ? rentalCost.toFixed(2) : "-";
+      const rentalPaymentLabel =
+        rentalPaymentType === "credit_term"
+          ? "Credit term"
+          : rentalPaymentType === "advance"
+          ? "Advance"
+          : "-";
       const templateData = {
         bookingType: "rental",
         referenceCode,
@@ -736,6 +815,9 @@ export async function POST(request) {
         factoryName: organization.factoryName,
         divisionName: organization.divisionName,
         departmentName: organization.departmentName,
+        rentalCompany,
+        rentalCost: rentalCost !== null ? rentalCost.toFixed(2) : "",
+        rentalPaymentType,
       };
 
       let statusMailDelivered = false;
@@ -763,6 +845,9 @@ export async function POST(request) {
           `เบอร์ติดต่อกลับ : ${contactPhone}`,
           `คนขับที่ได้รับมอบหมาย : ${gaDriverName} (${gaDriverPhone})`,
           `ประเภทรถ : ${gaVehicleTypeRaw || "-"}`,
+          `บริษัทรถเช่า : ${rentalCompany || "-"}`,
+          `ค่าใช้จ่ายรถเช่า : ${rentalCostLabel}`,
+          `ประเภทการจ่าย : ${rentalPaymentLabel}`,
         ];
         if (gaStatus === "rejected") {
           messageLines.push(`เหตุผลการไม่อนุมัติ : ${gaRejectReason || "-"}`);
@@ -798,6 +883,9 @@ export async function POST(request) {
             gaVehicleId,
             gaVehicleType: gaVehicleTypeRaw,
             gaRejectReason: gaStatus === "rejected" ? gaRejectReason : null,
+            rentalCompany: rentalCompany || null,
+            rentalCost,
+            rentalPaymentType: rentalPaymentType || null,
           }),
         ]
       );
@@ -832,6 +920,9 @@ export async function POST(request) {
          contact_phone,
          contact_email,
          cargo_details,
+         rental_company,
+         rental_cost,
+         rental_payment_type,
          ga_driver_name,
          ga_driver_phone,
          ga_vehicle_id,
@@ -839,7 +930,7 @@ export async function POST(request) {
          ga_status,
          ga_reject_reason,
          created_by
-       ) VALUES (?, 'rental', ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 'pending', NULL, ?)`
+       ) VALUES (?, 'rental', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 'pending', NULL, ?)`
       , [
         referenceCode,
         employeeId,
@@ -850,6 +941,9 @@ export async function POST(request) {
         contactPhone,
         contactEmail,
         cargoDetails || null,
+        null,
+        null,
+        null,
         requesterName,
       ]
     );
