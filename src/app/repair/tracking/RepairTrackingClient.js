@@ -144,7 +144,7 @@ const layoutStyles = {
     alignItems: 'center',
     gap: '8px',
   },
-  exportButton: {
+  exportButton: (disabled = false) => ({
     display: 'inline-flex',
     alignItems: 'center',
     gap: '8px',
@@ -154,8 +154,9 @@ const layoutStyles = {
     color: '#ffffff',
     padding: '10px 16px',
     fontWeight: '700',
-    cursor: 'pointer',
-  },
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.7 : 1,
+  }),
   refreshButton: (disabled = false) => ({
     display: 'inline-flex',
     alignItems: 'center',
@@ -324,6 +325,7 @@ export default function RepairTrackingClient() {
   const [garages, setGarages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState('');
   const [updatingStatusId, setUpdatingStatusId] = useState(null);
   const [assigningGarageId, setAssigningGarageId] = useState(null);
@@ -486,6 +488,90 @@ export default function RepairTrackingClient() {
     [loadData]
   );
 
+  const handleExportExcel = useCallback(async () => {
+    if (!Array.isArray(filteredRepairs) || filteredRepairs.length === 0 || isLoading) {
+      window.alert('ไม่มีข้อมูลสำหรับส่งออก');
+      return;
+    }
+
+    setIsExporting(true);
+
+    try {
+      const XLSX = await import('xlsx');
+      const headerLabels = [
+        'เลขแจ้งซ่อม',
+        'ทะเบียนรถ',
+        'ประเภทรถ',
+        'อาการ/ปัญหา',
+        'สถานะการซ่อม',
+        'ลำดับความสำคัญ',
+        'ผู้แจ้ง',
+        'อู่/ศูนย์บริการ',
+        'วันแจ้งซ่อม',
+        'วันซ่อมเสร็จ',
+        'ระยะเวลาดำเนินการ',
+        'ค่าใช้จ่าย (บาท)',
+      ];
+
+      // Build worksheet rows using the same column order shown in the table.
+      const dataRows = filteredRepairs.map((row) => {
+        const statusMeta = statusByKey(statusInfo, row.status);
+        const priorityMeta = priorityStyle(row.priorityLevel);
+        const garageLabel = row.garageName || (row.garageId ? 'ไม่พบข้อมูลอู่' : '-');
+
+        return [
+          row.repairCode || '-',
+          row.vehicleRegistration || '-',
+          row.vehicleType || '-',
+          row.issueDescription || '-',
+          statusMeta.label,
+          priorityMeta.label,
+          row.reporterName || '-',
+          garageLabel,
+          formatDateLabel(row.reportDate),
+          formatDateLabel(row.etaDate),
+          computeDurationLabel(row.reportDate, row.etaDate),
+          Number(row.netTotal) || 0,
+        ];
+      });
+
+      const worksheet = XLSX.utils.aoa_to_sheet([headerLabels, ...dataRows]);
+
+      const summaryRows = [
+        [],
+        ['สรุป'],
+        ['รายการซ่อมทั้งหมด', parseSummaryValue(filteredSummary, 'total')],
+        ['รออนุมัติ', parseSummaryValue(filteredSummary, 'pending')],
+        ['รอซ่อม', parseSummaryValue(filteredSummary, 'waitingRepair')],
+        ['ซ่อมเสร็จ', parseSummaryValue(filteredSummary, 'completed')],
+        ['รวมค่าใช้จ่าย (บาท)', formatCurrency(parseSummaryValue(filteredSummary, 'totalCost'))],
+      ];
+
+      XLSX.utils.sheet_add_aoa(worksheet, summaryRows, { origin: -1 });
+
+      const columnWidths = headerLabels.map((label, index) => {
+        const maxContentLength = Math.max(
+          label.length,
+          ...dataRows.map((row) => String(row[index] ?? '').length)
+        );
+        return { wch: Math.min(Math.max(maxContentLength + 4, 12), 32) };
+      });
+      worksheet['!cols'] = columnWidths;
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Repair Tracking');
+
+      const now = new Date();
+      const timestamp = `${now.toISOString().slice(0, 10)}-${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+      XLSX.writeFile(workbook, `repair-tracking-${timestamp}.xlsx`);
+    } catch (err) {
+      console.error('Failed to export repair tracking Excel', err);
+      window.alert('ไม่สามารถส่งออกไฟล์ได้ กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsExporting(false);
+    }
+  }, [filteredRepairs, filteredSummary, isLoading, statusInfo]);
+
   const summaryCards = useMemo(
     () => [
       { label: 'รายการซ่อมทั้งหมด', value: parseSummaryValue(filteredSummary, 'total') },
@@ -500,6 +586,8 @@ export default function RepairTrackingClient() {
     ],
     [filteredSummary]
   );
+
+  const canExport = !isLoading && filteredRepairs.length > 0;
 
   return (
     <div style={layoutStyles.wrapper}>
@@ -572,8 +660,13 @@ export default function RepairTrackingClient() {
             >
               <FaRotateRight /> {isRefreshing ? 'กำลังรีเฟรช' : 'รีเฟรช'}
             </button>
-            <button type="button" style={layoutStyles.exportButton}>
-              <FaFileExcel /> Export Excel
+            <button
+              type="button"
+              style={layoutStyles.exportButton(isExporting || !canExport)}
+              onClick={handleExportExcel}
+              disabled={isExporting || !canExport}
+            >
+              <FaFileExcel /> {isExporting ? 'กำลังส่งออก...' : 'Export Excel'}
             </button>
           </div>
         </div>
