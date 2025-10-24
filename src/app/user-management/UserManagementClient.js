@@ -272,6 +272,7 @@ const createInitialUserForm = () => ({
   department: "",
   division: "",
   role: "",
+  garage: "",
 });
 
 const createInitialGarageForm = () => ({
@@ -387,6 +388,7 @@ export default function UserManagementClient() {
       department: user.departmentId ? String(user.departmentId) : "",
       division: user.divisionId ? String(user.divisionId) : "",
       role: user.role || "",
+      garage: user.garageId ? String(user.garageId) : "",
     });
     setUserFormError("");
     setIsEditingSuperAdmin(superAdmin);
@@ -782,6 +784,7 @@ export default function UserManagementClient() {
           ...prev,
           [field]: value,
           email: value === "admin" ? prev.email : "",
+          garage: value === "vendor" ? prev.garage : "",
         };
       }
       return { ...prev, [field]: value };
@@ -842,6 +845,7 @@ export default function UserManagementClient() {
   }, [divisions, departmentForm.factoryId]);
 
   const shouldShowEmailField = userForm.role === "admin";
+  const shouldShowGarageField = userForm.role === "vendor" && !isEditingSuperAdmin;
 
   const handleSubmitUser = async (event) => {
     event.preventDefault();
@@ -857,6 +861,7 @@ export default function UserManagementClient() {
     const factoryId = userForm.factory ? Number(userForm.factory) : null;
     const departmentId = userForm.department ? Number(userForm.department) : null;
     const divisionId = userForm.division ? Number(userForm.division) : null;
+  const garageId = userForm.garage ? Number(userForm.garage) : null;
 
     if (!username) {
       setUserFormError("กรุณากรอกชื่อผู้ใช้");
@@ -875,6 +880,11 @@ export default function UserManagementClient() {
       }
     }
 
+    if (role === "vendor" && !garageId) {
+      setUserFormError("กรุณาเลือกอู่สำหรับผู้ให้บริการ");
+      return;
+    }
+
     if (!isEditing && !password) {
       setUserFormError("กรุณากรอกรหัสผ่าน");
       return;
@@ -889,6 +899,12 @@ export default function UserManagementClient() {
       payload.factoryId = factoryId;
       payload.departmentId = departmentId;
       payload.divisionId = divisionId;
+    }
+
+    if (role === "vendor") {
+      payload.garageId = garageId;
+    } else if (!isEditingSuperAdmin) {
+      payload.garageId = null;
     }
 
     if (role === "admin") {
@@ -1412,12 +1428,13 @@ export default function UserManagementClient() {
           <table style={styles.table}>
             <thead>
               <tr>
-                <th style={{ ...styles.tableHeadCell, width: "22%" }}>ชื่อผู้ใช้</th>
-                <th style={{ ...styles.tableHeadCell, width: "14%" }}>บทบาท</th>
-                <th style={{ ...styles.tableHeadCell, width: "20%" }}>โรงงาน</th>
-                <th style={{ ...styles.tableHeadCell, width: "18%" }}>ฝ่าย</th>
-                <th style={{ ...styles.tableHeadCell, width: "16%" }}>แผนก</th>
-                <th style={{ ...styles.tableHeadCell, width: "10%", textAlign: "center" }}>
+                <th style={{ ...styles.tableHeadCell, width: "20%" }}>ชื่อผู้ใช้</th>
+                <th style={{ ...styles.tableHeadCell, width: "12%" }}>บทบาท</th>
+                <th style={{ ...styles.tableHeadCell, width: "18%" }}>โรงงาน</th>
+                <th style={{ ...styles.tableHeadCell, width: "15%" }}>ฝ่าย</th>
+                <th style={{ ...styles.tableHeadCell, width: "15%" }}>แผนก</th>
+                <th style={{ ...styles.tableHeadCell, width: "12%" }}>อู่ซ่อม</th>
+                <th style={{ ...styles.tableHeadCell, width: "8%", textAlign: "center" }}>
                   จัดการ
                 </th>
               </tr>
@@ -1425,13 +1442,13 @@ export default function UserManagementClient() {
             <tbody>
               {isLoadingUsers ? (
                 <tr>
-                  <td colSpan={6} style={styles.tableEmpty}>
+                  <td colSpan={7} style={styles.tableEmpty}>
                     กำลังโหลดข้อมูล...
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={styles.tableEmpty}>
+                  <td colSpan={7} style={styles.tableEmpty}>
                     ยังไม่มีข้อมูลผู้ใช้
                   </td>
                 </tr>
@@ -1452,6 +1469,7 @@ export default function UserManagementClient() {
                       <td style={styles.tableCell}>{user.factoryName || "-"}</td>
                       <td style={styles.tableCell}>{user.divisionName || "-"}</td>
                       <td style={styles.tableCell}>{user.departmentName || "-"}</td>
+                      <td style={styles.tableCell}>{user.garageName || "-"}</td>
                       <td style={{ ...styles.tableCell, textAlign: "center" }}>
                         <div style={{ ...styles.actionGroup, width: "100%", justifyContent: "center" }}>
                           <button
@@ -2166,6 +2184,34 @@ export default function UserManagementClient() {
                       <option value="vendor">ผู้ให้บริการ (Vendor)</option>
                     </select>
                   </div>
+
+                  {shouldShowGarageField && (
+                    <div style={styles.fieldGroup}>
+                      <label style={styles.fieldLabel} htmlFor="user-garage">
+                        อู่ซ่อม
+                      </label>
+                      <select
+                        id="user-garage"
+                        style={styles.select}
+                        value={userForm.garage}
+                        onChange={handleInputChange("garage")}
+                        required
+                        disabled={garages.length === 0 || isLoadingGarages}
+                      >
+                        <option value="" disabled>
+                          {isLoadingGarages ? "กำลังโหลดรายการอู่..." : "เลือกอู่"}
+                        </option>
+                        {garages.map((garage) => (
+                          <option key={garage.id} value={String(garage.id)}>
+                            {garage.name}
+                          </option>
+                        ))}
+                      </select>
+                      {!isLoadingGarages && garages.length === 0 && (
+                        <p style={styles.helperText}>ยังไม่มีข้อมูลอู่ กรุณาเพิ่มอู่ก่อน</p>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </div>

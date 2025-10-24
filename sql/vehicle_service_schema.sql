@@ -61,16 +61,19 @@ CREATE TABLE IF NOT EXISTS `users` (
   `factory_id` INT NULL,
   `department_id` INT NULL,
   `division_id` INT NULL,
+  `garage_id` INT NULL,
   `last_login_at` DATETIME NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   KEY `idx_users_factory` (`factory_id`),
   KEY `idx_users_department` (`department_id`),
   KEY `idx_users_division` (`division_id`),
+  KEY `idx_users_garage` (`garage_id`),
   CONSTRAINT `fk_users_role` FOREIGN KEY (`role`) REFERENCES `roles`(`role_key`),
   CONSTRAINT `fk_users_factory` FOREIGN KEY (`factory_id`) REFERENCES `factories`(`id`) ON DELETE SET NULL,
   CONSTRAINT `fk_users_department` FOREIGN KEY (`department_id`) REFERENCES `departments`(`id`) ON DELETE SET NULL,
-  CONSTRAINT `fk_users_division` FOREIGN KEY (`division_id`) REFERENCES `divisions`(`id`) ON DELETE SET NULL
+  CONSTRAINT `fk_users_division` FOREIGN KEY (`division_id`) REFERENCES `divisions`(`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_users_garage` FOREIGN KEY (`garage_id`) REFERENCES `repair_garages`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `company_drivers` (

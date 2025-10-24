@@ -39,11 +39,14 @@ export async function GET() {
          u.department_id AS departmentId,
          d.name AS departmentName,
          u.division_id AS divisionId,
-         dv.name AS divisionName
+         dv.name AS divisionName,
+         u.garage_id AS garageId,
+         rg.name AS garageName
        FROM users u
        LEFT JOIN factories f ON u.factory_id = f.id
        LEFT JOIN departments d ON u.department_id = d.id
        LEFT JOIN divisions dv ON u.division_id = dv.id
+       LEFT JOIN repair_garages rg ON u.garage_id = rg.id
        ORDER BY u.created_at DESC`
     );
 
@@ -69,6 +72,7 @@ export async function POST(request) {
     const factoryId = Number(body?.factoryId);
     const departmentId = Number(body?.departmentId);
     const divisionId = Number(body?.divisionId);
+    let garageId = Number(body?.garageId);
 
     if (!username || !password) {
       return NextResponse.json(
@@ -104,6 +108,29 @@ export async function POST(request) {
         { error: "ชื่อผู้ใช้นี้มีอยู่แล้ว" },
         { status: 409 }
       );
+    }
+
+    if (role === "vendor") {
+      if (!Number.isInteger(garageId) || garageId <= 0) {
+        return NextResponse.json(
+          { error: "กรุณาเลือกอู่สำหรับบัญชีผู้ให้บริการ" },
+          { status: 400 }
+        );
+      }
+
+      const garageRows = await query(
+        "SELECT id FROM repair_garages WHERE id = ?",
+        [garageId]
+      );
+
+      if (!garageRows.length) {
+        return NextResponse.json(
+          { error: "ไม่พบอู่ที่เลือก" },
+          { status: 404 }
+        );
+      }
+    } else {
+      garageId = null;
     }
 
     const factory = await query("SELECT id FROM factories WHERE id = ?", [factoryId]);
@@ -152,9 +179,9 @@ export async function POST(request) {
 
     const passwordHash = await bcrypt.hash(password, 10);
     await query(
-      `INSERT INTO users (username, password_hash, email, role, factory_id, department_id, division_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [username, passwordHash, email, role, factoryId, departmentId, divisionId]
+      `INSERT INTO users (username, password_hash, email, role, factory_id, department_id, division_id, garage_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [username, passwordHash, email, role, factoryId, departmentId, divisionId, garageId]
     );
 
     const [createdUser] = await query(
@@ -171,11 +198,14 @@ export async function POST(request) {
          u.department_id AS departmentId,
          d.name AS departmentName,
          u.division_id AS divisionId,
-         dv.name AS divisionName
+         dv.name AS divisionName,
+         u.garage_id AS garageId,
+         rg.name AS garageName
        FROM users u
        LEFT JOIN factories f ON u.factory_id = f.id
        LEFT JOIN departments d ON u.department_id = d.id
        LEFT JOIN divisions dv ON u.division_id = dv.id
+       LEFT JOIN repair_garages rg ON u.garage_id = rg.id
        WHERE u.username = ?
        LIMIT 1`,
       [username]
@@ -260,11 +290,14 @@ export async function PUT(request) {
            u.department_id AS departmentId,
            d.name AS departmentName,
            u.division_id AS divisionId,
-           dv.name AS divisionName
+           dv.name AS divisionName,
+           u.garage_id AS garageId,
+           rg.name AS garageName
          FROM users u
          LEFT JOIN factories f ON u.factory_id = f.id
          LEFT JOIN departments d ON u.department_id = d.id
          LEFT JOIN divisions dv ON u.division_id = dv.id
+         LEFT JOIN repair_garages rg ON u.garage_id = rg.id
          WHERE u.id = ?
          LIMIT 1`,
         [id]
@@ -277,6 +310,7 @@ export async function PUT(request) {
     const factoryId = Number(body?.factoryId);
     const departmentId = Number(body?.departmentId);
     const divisionId = Number(body?.divisionId);
+    let garageId = Number(body?.garageId);
 
     if (!role) {
       return NextResponse.json({ error: "บทบาทผู้ใช้ไม่ถูกต้อง" }, { status: 400 });
@@ -297,6 +331,29 @@ export async function PUT(request) {
     const duplicate = await query("SELECT id FROM users WHERE username = ? AND id <> ?", [username, id]);
     if (duplicate.length) {
       return NextResponse.json({ error: "ชื่อผู้ใช้นี้มีอยู่แล้ว" }, { status: 409 });
+    }
+
+    if (role === "vendor") {
+      if (!Number.isInteger(garageId) || garageId <= 0) {
+        return NextResponse.json(
+          { error: "กรุณาเลือกอู่สำหรับบัญชีผู้ให้บริการ" },
+          { status: 400 }
+        );
+      }
+
+      const garageRows = await query(
+        "SELECT id FROM repair_garages WHERE id = ?",
+        [garageId]
+      );
+
+      if (!garageRows.length) {
+        return NextResponse.json(
+          { error: "ไม่พบอู่ที่เลือก" },
+          { status: 404 }
+        );
+      }
+    } else {
+      garageId = null;
     }
 
     const factory = await query("SELECT id FROM factories WHERE id = ?", [factoryId]);
@@ -340,8 +397,15 @@ export async function PUT(request) {
       );
     }
 
-    const updateFields = ["username = ?", "role = ?", "factory_id = ?", "department_id = ?", "division_id = ?"];
-    const params = [username, role, factoryId, departmentId, divisionId];
+    const updateFields = [
+      "username = ?",
+      "role = ?",
+      "factory_id = ?",
+      "department_id = ?",
+      "division_id = ?",
+      "garage_id = ?",
+    ];
+    const params = [username, role, factoryId, departmentId, divisionId, garageId];
 
     if (emailProvided) {
       updateFields.push("email = ?");
@@ -371,11 +435,14 @@ export async function PUT(request) {
          u.department_id AS departmentId,
          d.name AS departmentName,
          u.division_id AS divisionId,
-         dv.name AS divisionName
+         dv.name AS divisionName,
+         u.garage_id AS garageId,
+         rg.name AS garageName
        FROM users u
        LEFT JOIN factories f ON u.factory_id = f.id
        LEFT JOIN departments d ON u.department_id = d.id
        LEFT JOIN divisions dv ON u.division_id = dv.id
+       LEFT JOIN repair_garages rg ON u.garage_id = rg.id
        WHERE u.id = ?
        LIMIT 1`,
       [id]

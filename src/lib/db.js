@@ -345,6 +345,7 @@ export async function initDatabase({ seed = true } = {}) {
         factory_id INT NULL,
         department_id INT NULL,
         division_id INT NULL,
+        garage_id INT NULL,
         status ENUM('active', 'inactive') NOT NULL DEFAULT 'active',
         last_login_at DATETIME NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -352,10 +353,12 @@ export async function initDatabase({ seed = true } = {}) {
         KEY idx_users_factory (factory_id),
         KEY idx_users_department (department_id),
         KEY idx_users_division (division_id),
+        KEY idx_users_garage (garage_id),
         CONSTRAINT fk_users_role FOREIGN KEY (role) REFERENCES roles(role_key),
         CONSTRAINT fk_users_factory FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE SET NULL,
         CONSTRAINT fk_users_department FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL,
-        CONSTRAINT fk_users_division FOREIGN KEY (division_id) REFERENCES divisions(id) ON DELETE SET NULL
+        CONSTRAINT fk_users_division FOREIGN KEY (division_id) REFERENCES divisions(id) ON DELETE SET NULL,
+        CONSTRAINT fk_users_garage FOREIGN KEY (garage_id) REFERENCES repair_garages(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
@@ -377,9 +380,11 @@ export async function initDatabase({ seed = true } = {}) {
   await exec(`ALTER TABLE users ADD COLUMN factory_id INT NULL`);
   await exec(`ALTER TABLE users ADD COLUMN department_id INT NULL`);
   await exec(`ALTER TABLE users ADD COLUMN division_id INT NULL`);
+  await exec(`ALTER TABLE users ADD COLUMN garage_id INT NULL`);
     await exec(`ALTER TABLE users ADD INDEX idx_users_factory (factory_id)`);
     await exec(`ALTER TABLE users ADD INDEX idx_users_department (department_id)`);
     await exec(`ALTER TABLE users ADD INDEX idx_users_division (division_id)`);
+    await exec(`ALTER TABLE users ADD INDEX idx_users_garage (garage_id)`);
     await exec(`
       ALTER TABLE users
       ADD CONSTRAINT fk_users_factory FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE SET NULL
@@ -391,6 +396,10 @@ export async function initDatabase({ seed = true } = {}) {
     await exec(`
       ALTER TABLE users
       ADD CONSTRAINT fk_users_division FOREIGN KEY (division_id) REFERENCES divisions(id) ON DELETE SET NULL
+    `);
+    await exec(`
+      ALTER TABLE users
+      ADD CONSTRAINT fk_users_garage FOREIGN KEY (garage_id) REFERENCES repair_garages(id) ON DELETE SET NULL
     `);
 
     if (seed) {
