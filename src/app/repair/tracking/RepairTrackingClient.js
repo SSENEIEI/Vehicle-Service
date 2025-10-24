@@ -84,6 +84,14 @@ const layoutStyles = {
     fontSize: '14px',
     color: colors.textMuted,
   },
+  filterInput: {
+    flex: 1,
+    border: 'none',
+    outline: 'none',
+    fontSize: '14px',
+    color: colors.textDark,
+    backgroundColor: 'transparent',
+  },
   summaryRow: {
     display: 'grid',
     gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
@@ -209,14 +217,6 @@ const layoutStyles = {
   },
 };
 
-const defaultSummary = Object.freeze({
-  total: 0,
-  pending: 0,
-  waitingRepair: 0,
-  completed: 0,
-  totalCost: 0,
-});
-
 const currencyFormatter = new Intl.NumberFormat('th-TH', {
   style: 'currency',
   currency: 'THB',
@@ -279,9 +279,47 @@ const formatCurrency = (value) => currencyFormatter.format(Number(value) || 0);
 
 const parseSummaryValue = (summary, key) => Number(summary?.[key]) || 0;
 
+const parseDateOnly = (value) => {
+  if (!value) return null;
+  const str = String(value).slice(0, 10);
+  const [year, month, day] = str.split('-').map(Number);
+  if (!year || !month || !day) {
+    return null;
+  }
+  return new Date(year, month - 1, day);
+};
+
+const buildSummary = (rows) => {
+  const summary = {
+    total: 0,
+    pending: 0,
+    waitingRepair: 0,
+    completed: 0,
+    totalCost: 0,
+  };
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return summary;
+  }
+
+  for (const row of rows) {
+    summary.total += 1;
+    const status = row?.status || 'pending';
+    if (status === 'waiting_repair') {
+      summary.waitingRepair += 1;
+    } else if (status === 'completed') {
+      summary.completed += 1;
+    } else {
+      summary.pending += 1;
+    }
+    summary.totalCost += Number(row?.netTotal) || 0;
+  }
+
+  return summary;
+};
+
 export default function RepairTrackingClient() {
   const [repairs, setRepairs] = useState([]);
-  const [summary, setSummary] = useState(defaultSummary);
   const [statusInfo, setStatusInfo] = useState({});
   const [garages, setGarages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -289,6 +327,9 @@ export default function RepairTrackingClient() {
   const [error, setError] = useState('');
   const [updatingStatusId, setUpdatingStatusId] = useState(null);
   const [assigningGarageId, setAssigningGarageId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const loadData = useCallback(async (withSpinner = true) => {
     if (withSpinner) {
@@ -308,7 +349,6 @@ export default function RepairTrackingClient() {
       }
 
       setRepairs(Array.isArray(trackingResponse.repairs) ? trackingResponse.repairs : []);
-      setSummary({ ...defaultSummary, ...(trackingResponse.summary || {}) });
       setStatusInfo(trackingResponse.statusInfo || {});
 
       if (garagesResponse && Array.isArray(garagesResponse.garages)) {
@@ -322,7 +362,6 @@ export default function RepairTrackingClient() {
       console.error('Failed to load repair tracking data', err);
       setError(err?.message || 'ไม่สามารถโหลดข้อมูลได้');
       setRepairs([]);
-      setSummary(defaultSummary);
       setStatusInfo({});
       setGarages([]);
     } finally {
@@ -337,6 +376,63 @@ export default function RepairTrackingClient() {
   useEffect(() => {
     loadData(true);
   }, [loadData]);
+
+  const filteredRepairs = useMemo(() => {
+    if (!Array.isArray(repairs) || repairs.length === 0) {
+      return [];
+    }
+
+    const normalizedTerm = searchTerm.trim().toLowerCase();
+    const start = parseDateOnly(startDate);
+    const end = parseDateOnly(endDate);
+
+    return repairs.filter((row) => {
+      const valuesToSearch = [
+        row.repairCode,
+        row.vehicleRegistration,
+        row.vehicleType,
+        row.issueDescription,
+        row.priorityLevel,
+        row.reporterName,
+        row.garageName,
+      ];
+
+      const matchesSearch =
+        !normalizedTerm ||
+        valuesToSearch.some((value) =>
+          String(value || '').toLowerCase().includes(normalizedTerm)
+        );
+
+      if (!matchesSearch) {
+        return false;
+      }
+
+      if (!start && !end) {
+        return true;
+      }
+
+      const report = parseDateOnly(row.reportDate);
+      const eta = parseDateOnly(row.etaDate);
+      if (!report || !eta) {
+        return false;
+      }
+
+      if (start && report < start) {
+        return false;
+      }
+      if (end && eta > end) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [repairs, searchTerm, startDate, endDate]);
+
+  const filteredSummary = useMemo(() => buildSummary(filteredRepairs), [filteredRepairs]);
+
+  const hasActiveFilters = Boolean(
+    searchTerm.trim() || startDate || endDate
+  );
 
   const handleAdvanceStatus = useCallback(
     async (id) => {
@@ -392,17 +488,17 @@ export default function RepairTrackingClient() {
 
   const summaryCards = useMemo(
     () => [
-      { label: 'รายการซ่อมทั้งหมด', value: parseSummaryValue(summary, 'total') },
-      { label: 'รออนุมัติ', value: parseSummaryValue(summary, 'pending') },
-      { label: 'รอซ่อม', value: parseSummaryValue(summary, 'waitingRepair') },
-      { label: 'ซ่อมเสร็จ', value: parseSummaryValue(summary, 'completed') },
+      { label: 'รายการซ่อมทั้งหมด', value: parseSummaryValue(filteredSummary, 'total') },
+      { label: 'รออนุมัติ', value: parseSummaryValue(filteredSummary, 'pending') },
+      { label: 'รอซ่อม', value: parseSummaryValue(filteredSummary, 'waitingRepair') },
+      { label: 'ซ่อมเสร็จ', value: parseSummaryValue(filteredSummary, 'completed') },
       {
         label: 'รวมค่าใช้จ่าย',
-        value: parseSummaryValue(summary, 'totalCost'),
+        value: parseSummaryValue(filteredSummary, 'totalCost'),
         format: (val) => formatCurrency(val),
       },
     ],
-    [summary]
+    [filteredSummary]
   );
 
   return (
@@ -417,13 +513,34 @@ export default function RepairTrackingClient() {
 
         <div style={layoutStyles.filtersRow}>
           <div style={layoutStyles.filterField}>
-            <FaMagnifyingGlass /> ค้นหา: เลขแจ้งซ่อม/ทะเบียนรถ/คำอธิบาย (เร็ว ๆ นี้)
+            <FaMagnifyingGlass />
+            <input
+              style={layoutStyles.filterInput}
+              placeholder="ค้นหา: เลขแจ้งซ่อม/ทะเบียนรถ/คำอธิบาย"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              aria-label="ค้นหางานซ่อม"
+            />
           </div>
           <div style={layoutStyles.filterField}>
-            <FaCalendarDays /> ตั้งแต่วันที่ (เร็ว ๆ นี้)
+            <FaCalendarDays />
+            <input
+              type="date"
+              style={layoutStyles.filterInput}
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+              aria-label="ค้นหาตั้งแต่วันที่"
+            />
           </div>
           <div style={layoutStyles.filterField}>
-            <FaCalendarDays /> ถึงวันที่ (เร็ว ๆ นี้)
+            <FaCalendarDays />
+            <input
+              type="date"
+              style={layoutStyles.filterInput}
+              value={endDate}
+              onChange={(event) => setEndDate(event.target.value)}
+              aria-label="ค้นหาถึงวันที่"
+            />
           </div>
         </div>
       </div>
@@ -485,14 +602,16 @@ export default function RepairTrackingClient() {
                   กำลังโหลดข้อมูล...
                 </td>
               </tr>
-            ) : repairs.length === 0 ? (
+            ) : filteredRepairs.length === 0 ? (
               <tr>
                 <td colSpan={12} style={layoutStyles.tableEmpty}>
-                  ยังไม่มีรายการแจ้งซ่อม
+                  {hasActiveFilters
+                    ? 'ไม่พบรายการที่ตรงกับเงื่อนไขการค้นหา'
+                    : 'ยังไม่มีรายการแจ้งซ่อม'}
                 </td>
               </tr>
             ) : (
-              repairs.map((row) => {
+              filteredRepairs.map((row) => {
                 const statusMeta = statusByKey(statusInfo, row.status);
                 const priorityMeta = priorityStyle(row.priorityLevel);
                 const hasActiveGarage = row.garageId
