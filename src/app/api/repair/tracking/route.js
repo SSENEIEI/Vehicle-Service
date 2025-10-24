@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { query } from "@/lib/db";
+import { initDatabase, query } from "@/lib/db";
 
 const STATUS_SEQUENCE = ["pending", "waiting_repair", "completed"];
 const STATUS_INFO = {
@@ -57,6 +57,7 @@ function decorateRepairRow(row) {
     netTotal: toNumber(row.netTotal),
     garageId: row.garageId ? Number(row.garageId) : null,
     garageName: row.garageName || null,
+    assignedVendorUsername: row.assignedVendorUsername || null,
     updatedAt: row.updatedAt ? formatDate(row.updatedAt) : null,
   };
 }
@@ -90,6 +91,25 @@ function computeSummary(rows) {
   return summary;
 }
 
+async function ensureAssignedVendorColumn() {
+  await initDatabase();
+  const existing = await query(
+    `SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'repair_requests'
+       AND COLUMN_NAME = 'assigned_vendor_username'
+     LIMIT 1`
+  );
+
+  if (!existing.length) {
+    await query(
+      `ALTER TABLE repair_requests
+       ADD COLUMN assigned_vendor_username VARCHAR(120) NULL AFTER garage_id`
+    );
+  }
+}
+
 async function fetchRepairs() {
   const rows = await query(
     `SELECT
@@ -107,6 +127,7 @@ async function fetchRepairs() {
        rr.vat_amount AS vatAmount,
        rr.net_total AS netTotal,
        rr.garage_id AS garageId,
+       rr.assigned_vendor_username AS assignedVendorUsername,
        rr.updated_at AS updatedAt,
        rr.created_by AS createdBy,
        COALESCE(u.username, rr.created_by) AS reporterName,
@@ -137,6 +158,7 @@ async function fetchRepairById(id) {
        rr.vat_amount AS vatAmount,
        rr.net_total AS netTotal,
        rr.garage_id AS garageId,
+       rr.assigned_vendor_username AS assignedVendorUsername,
        rr.updated_at AS updatedAt,
        rr.created_by AS createdBy,
        COALESCE(u.username, rr.created_by) AS reporterName,
@@ -154,6 +176,7 @@ async function fetchRepairById(id) {
 
 export async function GET() {
   try {
+    await ensureAssignedVendorColumn();
     const rows = await fetchRepairs();
     const repairs = rows.map(decorateRepairRow);
     const summary = computeSummary(rows);
@@ -174,6 +197,7 @@ export async function GET() {
 
 export async function PATCH(request) {
   try {
+    await ensureAssignedVendorColumn();
     const body = await request.json();
     const id = Number(body?.id);
     const action = String(body?.action || "").trim();
@@ -260,6 +284,55 @@ export async function PATCH(request) {
           [id]
         );
       }
+
+      const updated = await fetchRepairById(id);
+      return NextResponse.json({ success: true, repair: decorateRepairRow(updated) });
+    }
+
+    if (action === "assign-vendor") {
+      let vendorUsername = body?.vendorUsername;
+      if (vendorUsername !== null && vendorUsername !== undefined) {
+        vendorUsername = String(vendorUsername).trim();
+      }
+
+      if (!vendorUsername) {
+        await query(
+          `UPDATE repair_requests
+           SET assigned_vendor_username = NULL,
+               garage_id = NULL,
+               updated_at = NOW()
+           WHERE id = ?`,
+          [id]
+        );
+        const updated = await fetchRepairById(id);
+        return NextResponse.json({ success: true, repair: decorateRepairRow(updated) });
+      }
+
+      const [vendor] = await query(
+        `SELECT id, username
+         FROM users
+         WHERE username = ?
+           AND role = 'vendor'
+           AND status <> 'inactive'
+         LIMIT 1`,
+        [vendorUsername]
+      );
+
+      if (!vendor) {
+        return NextResponse.json(
+          { error: "ไม่พบบัญชี Vendor" },
+          { status: 404 }
+        );
+      }
+
+      await query(
+        `UPDATE repair_requests
+         SET assigned_vendor_username = ?,
+             garage_id = NULL,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [vendor.username, id]
+      );
 
       const updated = await fetchRepairById(id);
       return NextResponse.json({ success: true, repair: decorateRepairRow(updated) });

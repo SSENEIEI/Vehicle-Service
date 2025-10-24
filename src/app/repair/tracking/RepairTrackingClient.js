@@ -328,7 +328,7 @@ export default function RepairTrackingClient() {
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState('');
   const [updatingStatusId, setUpdatingStatusId] = useState(null);
-  const [assigningGarageId, setAssigningGarageId] = useState(null);
+  const [assigningVendorRowId, setAssigningVendorRowId] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -357,20 +357,22 @@ export default function RepairTrackingClient() {
         ? usersResponse.users.filter((user) => user?.role === 'vendor' && user?.status !== 'inactive')
         : [];
 
+      const seenUsernames = new Set();
       const normalizedVendors = [];
-      const seenGarageIds = new Set();
+
       for (const vendor of vendorUsers) {
-        const garageId = Number(vendor?.garageId);
-        if (!garageId || seenGarageIds.has(garageId)) {
+        const username = String(vendor?.username || '').trim();
+        if (!username || seenUsernames.has(username.toLowerCase())) {
           continue;
         }
-        seenGarageIds.add(garageId);
+        seenUsernames.add(username.toLowerCase());
         normalizedVendors.push({
-          garageId,
-          username: vendor.username,
-          garageName: vendor.garageName || null,
+          key: vendor?.id ? `vendor-${vendor.id}` : `vendor-${username}`,
+          username,
         });
       }
+
+      normalizedVendors.sort((a, b) => a.username.localeCompare(b.username, 'th-TH'));
 
       setVendorOptions(normalizedVendors);
     } catch (err) {
@@ -410,6 +412,7 @@ export default function RepairTrackingClient() {
         row.priorityLevel,
         row.reporterName,
         row.garageName,
+        row.assignedVendorUsername,
       ];
 
       const matchesSearch =
@@ -474,28 +477,28 @@ export default function RepairTrackingClient() {
     [loadData]
   );
 
-  const handleGarageChange = useCallback(
-    async (id, value) => {
+  const handleVendorAssign = useCallback(
+    async (id, username) => {
       if (!id) {
         return;
       }
-      setAssigningGarageId(id);
+      setAssigningVendorRowId(id);
       try {
         const response = await fetch('/api/repair/tracking', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'assign-garage', id, garageId: value }),
+          body: JSON.stringify({ action: 'assign-vendor', id, vendorUsername: username }),
         });
         if (!response.ok) {
           const payload = await response.json().catch(() => ({}));
-          throw new Error(payload?.error || 'ไม่สามารถบันทึกอู่ได้');
+          throw new Error(payload?.error || 'ไม่สามารถบันทึกผู้ให้บริการได้');
         }
         await loadData(false);
       } catch (err) {
-        console.error('Failed to assign garage', err);
-        setError(err?.message || 'ไม่สามารถบันทึกอู่ได้');
+        console.error('Failed to assign vendor', err);
+        setError(err?.message || 'ไม่สามารถบันทึกผู้ให้บริการได้');
       } finally {
-        setAssigningGarageId(null);
+        setAssigningVendorRowId(null);
       }
     },
     [loadData]
@@ -519,7 +522,7 @@ export default function RepairTrackingClient() {
         'สถานะการซ่อม',
         'ลำดับความสำคัญ',
         'ผู้แจ้ง',
-        'อู่/ศูนย์บริการ',
+  'ผู้ให้บริการ (Vendor)',
         'วันแจ้งซ่อม',
         'วันซ่อมเสร็จ',
         'ระยะเวลาดำเนินการ',
@@ -530,7 +533,7 @@ export default function RepairTrackingClient() {
       const dataRows = filteredRepairs.map((row) => {
         const statusMeta = statusByKey(statusInfo, row.status);
         const priorityMeta = priorityStyle(row.priorityLevel);
-        const garageLabel = row.garageName || (row.garageId ? 'ไม่พบข้อมูลอู่' : '-');
+        const vendorLabel = row.assignedVendorUsername || '-';
 
         return [
           row.repairCode || '-',
@@ -540,7 +543,7 @@ export default function RepairTrackingClient() {
           statusMeta.label,
           priorityMeta.label,
           row.reporterName || '-',
-          garageLabel,
+          vendorLabel,
           formatDateLabel(row.reportDate),
           formatDateLabel(row.etaDate),
           computeDurationLabel(row.reportDate, row.etaDate),
@@ -609,7 +612,7 @@ export default function RepairTrackingClient() {
           <FaTable size={20} /> รายงานการติดตามแจ้งซ่อมรถบริษัทฯ
         </div>
         <p style={layoutStyles.headerSubtitle}>
-          ติดตามสถานะงานซ่อม, การมอบหมายอู่ และความคืบหน้าทั้งหมดจากข้อมูลที่แจ้งซ่อม
+          ติดตามสถานะงานซ่อม, การมอบหมายผู้ให้บริการ และความคืบหน้าทั้งหมดจากข้อมูลที่แจ้งซ่อม
         </p>
 
         <div style={layoutStyles.filtersRow}>
@@ -694,7 +697,7 @@ export default function RepairTrackingClient() {
               <th style={layoutStyles.tableHeadCell}>สถานะการซ่อม</th>
               <th style={layoutStyles.tableHeadCell}>ลำดับความสำคัญ</th>
               <th style={layoutStyles.tableHeadCell}>ผู้แจ้ง</th>
-              <th style={layoutStyles.tableHeadCell}>อู่/ศูนย์บริการ</th>
+              <th style={layoutStyles.tableHeadCell}>ผู้ให้บริการ (Vendor)</th>
               <th style={layoutStyles.tableHeadCell}>วันแจ้งซ่อม</th>
               <th style={layoutStyles.tableHeadCell}>วันซ่อมเสร็จ</th>
               <th style={layoutStyles.tableHeadCell}>ระยะเวลาดำเนินการ</th>
@@ -720,8 +723,10 @@ export default function RepairTrackingClient() {
               filteredRepairs.map((row) => {
                 const statusMeta = statusByKey(statusInfo, row.status);
                 const priorityMeta = priorityStyle(row.priorityLevel);
-                const hasActiveVendor = row.garageId
-                  ? vendorOptions.some((vendor) => Number(vendor.garageId) === Number(row.garageId))
+                const hasActiveVendor = row.assignedVendorUsername
+                  ? vendorOptions.some(
+                      (vendor) => vendor.username.toLowerCase() === row.assignedVendorUsername.toLowerCase()
+                    )
                   : false;
                 return (
                   <tr key={row.id}>
@@ -752,20 +757,23 @@ export default function RepairTrackingClient() {
                     <td style={layoutStyles.tableCell}>
                       <select
                         style={layoutStyles.select}
-                        value={row.garageId ? String(row.garageId) : ''}
-                        onChange={(event) => handleGarageChange(row.id, event.target.value)}
-                        disabled={assigningGarageId === row.id || vendorOptions.length === 0}
+                        value={row.assignedVendorUsername || ''}
+                        onChange={(event) => handleVendorAssign(row.id, event.target.value)}
+                        disabled={
+                          assigningVendorRowId === row.id ||
+                          (vendorOptions.length === 0 && !row.assignedVendorUsername)
+                        }
                       >
                         <option value="">
                           {vendorOptions.length === 0 ? 'ไม่มี Vendor ที่พร้อมใช้งาน' : 'เลือก Vendor'}
                         </option>
-                        {!hasActiveVendor && row.garageId && row.garageName && (
-                          <option value={String(row.garageId)}>
-                            {row.garageName} (ไม่พบบัญชี Vendor)
+                        {!hasActiveVendor && row.assignedVendorUsername && (
+                          <option value={row.assignedVendorUsername}>
+                            {row.assignedVendorUsername} (ไม่พบบัญชี Vendor)
                           </option>
                         )}
                         {vendorOptions.map((vendor) => (
-                          <option key={vendor.garageId} value={String(vendor.garageId)}>
+                          <option key={vendor.key} value={vendor.username}>
                             {vendor.username}
                           </option>
                         ))}

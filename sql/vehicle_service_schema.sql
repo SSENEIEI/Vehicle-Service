@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS `repair_requests` (
   `completed_date` DATE NULL,
   `status` ENUM('pending', 'waiting_repair', 'completed') NOT NULL DEFAULT 'pending',
   `garage_id` INT NULL,
+  `assigned_vendor_username` VARCHAR(120) NULL,
   `cost_items` JSON NULL,
   `subtotal` DECIMAL(12,2) NOT NULL DEFAULT 0,
   `vat_amount` DECIMAL(12,2) NOT NULL DEFAULT 0,
