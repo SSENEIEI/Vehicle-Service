@@ -94,12 +94,12 @@ export async function POST(request) {
     while (attempts < 5) {
       const candidate = repairCode || (await getNextRepairCode());
       try {
-      const result = await query(
-       `INSERT INTO repair_requests
-         (repair_code, vehicle_registration, vehicle_type, priority_level,
-          issue_description, report_date, eta_date, cost_items,
-          subtotal, vat_amount, net_total, attachments)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        const result = await query(
+          `INSERT INTO repair_requests
+            (repair_code, vehicle_registration, vehicle_type, priority_level,
+             issue_description, report_date, eta_date, completed_date, status, garage_id,
+             cost_items, subtotal, vat_amount, net_total, attachments)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             candidate,
             vehicleRegistration,
@@ -108,6 +108,9 @@ export async function POST(request) {
             issueDescription,
             reportDate,
             etaDate || null,
+            null,
+            'pending',
+            null,
             costItems.length ? JSON.stringify(costItems) : null,
             subtotal,
             vatAmount,

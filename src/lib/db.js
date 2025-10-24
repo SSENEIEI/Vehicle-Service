@@ -324,6 +324,9 @@ export async function initDatabase({ seed = true } = {}) {
         issue_description TEXT NOT NULL,
         report_date DATE NOT NULL,
         eta_date DATE NULL,
+        completed_date DATE NULL,
+        status ENUM('pending', 'waiting_repair', 'completed') NOT NULL DEFAULT 'pending',
+        garage_id INT NULL,
         cost_items JSON NULL,
         subtotal DECIMAL(12,2) NOT NULL DEFAULT 0,
         vat_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
@@ -331,7 +334,10 @@ export async function initDatabase({ seed = true } = {}) {
         attachments JSON NULL,
         created_by VARCHAR(120) NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        KEY idx_repair_requests_status (status),
+        KEY idx_repair_requests_garage (garage_id),
+        CONSTRAINT fk_repair_requests_garage FOREIGN KEY (garage_id) REFERENCES repair_garages(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
@@ -362,7 +368,14 @@ export async function initDatabase({ seed = true } = {}) {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-    await exec(`ALTER TABLE divisions DROP FOREIGN KEY fk_divisions_department`);
+  await exec(`ALTER TABLE repair_requests ADD COLUMN IF NOT EXISTS status ENUM('pending', 'waiting_repair', 'completed') NOT NULL DEFAULT 'pending'`);
+  await exec(`ALTER TABLE repair_requests ADD COLUMN IF NOT EXISTS garage_id INT NULL AFTER status`);
+  await exec(`ALTER TABLE repair_requests ADD COLUMN IF NOT EXISTS completed_date DATE NULL AFTER eta_date`);
+  await exec(`ALTER TABLE repair_requests ADD INDEX IF NOT EXISTS idx_repair_requests_status (status)`);
+  await exec(`ALTER TABLE repair_requests ADD INDEX IF NOT EXISTS idx_repair_requests_garage (garage_id)`);
+  await exec(`ALTER TABLE repair_requests ADD CONSTRAINT fk_repair_requests_garage FOREIGN KEY (garage_id) REFERENCES repair_garages(id) ON DELETE SET NULL`);
+
+  await exec(`ALTER TABLE divisions DROP FOREIGN KEY fk_divisions_department`);
     await exec(`ALTER TABLE divisions DROP INDEX uniq_division_per_department`);
   await exec(`ALTER TABLE divisions DROP COLUMN IF EXISTS department_id`);
   await exec(`ALTER TABLE divisions ADD UNIQUE INDEX IF NOT EXISTS uniq_division_per_factory (factory_id, name)`);

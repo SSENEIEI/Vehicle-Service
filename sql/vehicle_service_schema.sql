@@ -109,6 +109,31 @@ CREATE TABLE IF NOT EXISTS `repair_garages` (
   UNIQUE KEY `uniq_repair_garage_name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS `repair_requests` (
+  `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `repair_code` VARCHAR(16) NOT NULL UNIQUE,
+  `vehicle_registration` VARCHAR(50) NOT NULL,
+  `vehicle_type` VARCHAR(80) NULL,
+  `priority_level` VARCHAR(30) NULL,
+  `issue_description` TEXT NOT NULL,
+  `report_date` DATE NOT NULL,
+  `eta_date` DATE NULL,
+  `completed_date` DATE NULL,
+  `status` ENUM('pending', 'waiting_repair', 'completed') NOT NULL DEFAULT 'pending',
+  `garage_id` INT NULL,
+  `cost_items` JSON NULL,
+  `subtotal` DECIMAL(12,2) NOT NULL DEFAULT 0,
+  `vat_amount` DECIMAL(12,2) NOT NULL DEFAULT 0,
+  `net_total` DECIMAL(12,2) NOT NULL DEFAULT 0,
+  `attachments` JSON NULL,
+  `created_by` VARCHAR(120) NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY `idx_repair_requests_status` (`status`),
+  KEY `idx_repair_requests_garage` (`garage_id`),
+  CONSTRAINT `fk_repair_requests_garage` FOREIGN KEY (`garage_id`) REFERENCES `repair_garages`(`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 INSERT INTO `users` (`username`, `password_hash`, `email`, `role`, `status`)
 VALUES ('gaservice', '$2b$10$R9ObxUutkMVUUG6qKIHAYuG5RZT0xG9WuWo9mhHd/95AJO1TW9Kg2', NULL, 'admin', 'active')
 ON DUPLICATE KEY UPDATE
