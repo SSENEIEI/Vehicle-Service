@@ -361,15 +361,16 @@ export default function UserManagementClient() {
   const handleOpenEditUserModal = (user) => {
     if (!user) return;
     const superAdmin = isSuperAdminUser(user);
+    const isVendor = user.role === "vendor";
     setUserModalMode("edit");
     setEditingUserId(user.id ?? null);
     setUserForm({
       username: user.username || "",
       password: "",
-      email: user.email || "",
-      factory: user.factoryId ? String(user.factoryId) : "",
-      department: user.departmentId ? String(user.departmentId) : "",
-      division: user.divisionId ? String(user.divisionId) : "",
+      email: user.role === "admin" ? user.email || "" : "",
+      factory: isVendor ? "" : user.factoryId ? String(user.factoryId) : "",
+      department: isVendor ? "" : user.departmentId ? String(user.departmentId) : "",
+      division: isVendor ? "" : user.divisionId ? String(user.divisionId) : "",
       role: user.role || "",
     });
     setUserFormError("");
@@ -754,10 +755,14 @@ export default function UserManagementClient() {
     const { value } = event.target;
     setUserForm((prev) => {
       if (field === "role") {
+        const isVendorSelected = value === "vendor";
         return {
           ...prev,
           [field]: value,
           email: value === "admin" ? prev.email : "",
+          factory: isVendorSelected ? "" : prev.factory,
+          division: isVendorSelected ? "" : prev.division,
+          department: isVendorSelected ? "" : prev.department,
         };
       }
       return { ...prev, [field]: value };
@@ -766,6 +771,9 @@ export default function UserManagementClient() {
 
   const handleFactorySelectChange = (event) => {
     const { value } = event.target;
+    if (userForm.role === "vendor") {
+      return;
+    }
     setUserForm((prev) => ({
       ...prev,
       factory: value,
@@ -776,6 +784,9 @@ export default function UserManagementClient() {
 
   const handleDivisionSelectChange = (event) => {
     const { value } = event.target;
+    if (userForm.role === "vendor") {
+      return;
+    }
     setUserForm((prev) => ({
       ...prev,
       division: value,
@@ -785,6 +796,9 @@ export default function UserManagementClient() {
 
   const handleDepartmentSelectChange = (event) => {
     const { value } = event.target;
+    if (userForm.role === "vendor") {
+      return;
+    }
     setUserForm((prev) => ({
       ...prev,
       department: value,
@@ -810,6 +824,7 @@ export default function UserManagementClient() {
   }, [divisions, departmentForm.factoryId]);
 
   const shouldShowEmailField = userForm.role === "admin";
+  const isVendorRole = userForm.role === "vendor";
 
   const handleSubmitUser = async (event) => {
     event.preventDefault();
@@ -821,6 +836,7 @@ export default function UserManagementClient() {
     const username = userForm.username.trim();
     const password = userForm.password.trim();
     const role = userForm.role;
+    const vendorRoleSelected = role === "vendor";
     const email = userForm.email.trim();
     const factoryId = userForm.factory ? Number(userForm.factory) : null;
     const departmentId = userForm.department ? Number(userForm.department) : null;
@@ -837,9 +853,11 @@ export default function UserManagementClient() {
     }
 
     if (!editingSuperAdmin) {
-      if (!factoryId || !divisionId || !departmentId) {
-        setUserFormError("กรุณาเลือกโรงงาน ฝ่าย และแผนก");
-        return;
+      if (!vendorRoleSelected) {
+        if (!factoryId || !divisionId || !departmentId) {
+          setUserFormError("กรุณาเลือกโรงงาน ฝ่าย และแผนก");
+          return;
+        }
       }
     }
 
@@ -854,9 +872,9 @@ export default function UserManagementClient() {
     };
 
     if (!editingSuperAdmin) {
-      payload.factoryId = factoryId;
-      payload.departmentId = departmentId;
-      payload.divisionId = divisionId;
+      payload.factoryId = vendorRoleSelected ? null : factoryId;
+      payload.departmentId = vendorRoleSelected ? null : departmentId;
+      payload.divisionId = vendorRoleSelected ? null : divisionId;
     }
 
     if (role === "admin") {
@@ -1901,84 +1919,6 @@ export default function UserManagementClient() {
               {!isEditingSuperAdmin && (
                 <>
                   <div style={styles.fieldGroup}>
-                    <label style={styles.fieldLabel} htmlFor="user-factory">
-                      โรงงาน
-                    </label>
-                    <select
-                      id="user-factory"
-                      style={styles.select}
-                      value={userForm.factory}
-                      onChange={handleFactorySelectChange}
-                      required
-                      disabled={factories.length === 0}
-                    >
-                      <option value="" disabled>
-                        เลือกโรงงาน
-                      </option>
-                      {factories.map((factory) => (
-                        <option key={factory.id} value={String(factory.id)}>
-                          {factory.name}
-                        </option>
-                      ))}
-                    </select>
-                    {factories.length === 0 && (
-                      <p style={styles.helperText}>ยังไม่มีโรงงาน กรุณาเพิ่มโรงงานก่อน</p>
-                    )}
-                  </div>
-
-                  <div style={styles.fieldGroup}>
-                    <label style={styles.fieldLabel} htmlFor="user-division">
-                      ฝ่าย
-                    </label>
-                    <select
-                      id="user-division"
-                      style={styles.select}
-                      value={userForm.division}
-                      onChange={handleDivisionSelectChange}
-                      required
-                      disabled={!userForm.factory || divisionOptions.length === 0}
-                    >
-                      <option value="" disabled>
-                        {userForm.factory ? "เลือกฝ่าย" : "เลือกโรงงานก่อน"}
-                      </option>
-                      {divisionOptions.map((division) => (
-                        <option key={division.id} value={String(division.id)}>
-                          {division.name}
-                        </option>
-                      ))}
-                    </select>
-                    {userForm.factory && divisionOptions.length === 0 && (
-                      <p style={styles.helperText}>ยังไม่มีฝ่ายในโรงงานนี้</p>
-                    )}
-                  </div>
-
-                  <div style={styles.fieldGroup}>
-                    <label style={styles.fieldLabel} htmlFor="user-department">
-                      แผนก
-                    </label>
-                    <select
-                      id="user-department"
-                      style={styles.select}
-                      value={userForm.department}
-                      onChange={handleDepartmentSelectChange}
-                      required
-                      disabled={!userForm.division || departmentOptions.length === 0}
-                    >
-                      <option value="" disabled>
-                        {userForm.division ? "เลือกแผนก" : "เลือกฝ่ายก่อน"}
-                      </option>
-                      {departmentOptions.map((department) => (
-                        <option key={department.id} value={String(department.id)}>
-                          {department.name}
-                        </option>
-                      ))}
-                    </select>
-                    {userForm.division && departmentOptions.length === 0 && (
-                      <p style={styles.helperText}>ยังไม่มีแผนกในฝ่ายนี้</p>
-                    )}
-                  </div>
-
-                  <div style={styles.fieldGroup}>
                     <label style={styles.fieldLabel} htmlFor="user-role">
                       บทบาทผู้ใช้
                     </label>
@@ -1995,6 +1935,106 @@ export default function UserManagementClient() {
                       <option value="user">ผู้ใช้ทั่วไป</option>
                       <option value="vendor">ผู้ให้บริการ (Vendor)</option>
                     </select>
+                  </div>
+
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel} htmlFor="user-factory">
+                      โรงงาน
+                    </label>
+                    <select
+                      id="user-factory"
+                      style={styles.select}
+                      value={userForm.factory}
+                      onChange={handleFactorySelectChange}
+                      required={!isVendorRole}
+                      disabled={isVendorRole || factories.length === 0}
+                    >
+                      <option value="" disabled>
+                        {isVendorRole ? "ไม่ต้องเลือก (Vendor)" : "เลือกโรงงาน"}
+                      </option>
+                      {factories.map((factory) => (
+                        <option key={factory.id} value={String(factory.id)}>
+                          {factory.name}
+                        </option>
+                      ))}
+                    </select>
+                    {isVendorRole ? (
+                      <p style={styles.helperText}>บทบาท Vendor ไม่จำเป็นต้องเลือกโรงงาน</p>
+                    ) : (
+                      factories.length === 0 && (
+                        <p style={styles.helperText}>ยังไม่มีโรงงาน กรุณาเพิ่มโรงงานก่อน</p>
+                      )
+                    )}
+                  </div>
+
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel} htmlFor="user-division">
+                      ฝ่าย
+                    </label>
+                    <select
+                      id="user-division"
+                      style={styles.select}
+                      value={userForm.division}
+                      onChange={handleDivisionSelectChange}
+                      required={!isVendorRole}
+                      disabled={
+                        isVendorRole || !userForm.factory || divisionOptions.length === 0
+                      }
+                    >
+                      <option value="" disabled>
+                        {isVendorRole
+                          ? "ไม่ต้องเลือก (Vendor)"
+                          : userForm.factory
+                            ? "เลือกฝ่าย"
+                            : "เลือกโรงงานก่อน"}
+                      </option>
+                      {divisionOptions.map((division) => (
+                        <option key={division.id} value={String(division.id)}>
+                          {division.name}
+                        </option>
+                      ))}
+                    </select>
+                    {!isVendorRole && userForm.factory && divisionOptions.length === 0 && (
+                      <p style={styles.helperText}>ยังไม่มีฝ่ายในโรงงานนี้</p>
+                    )}
+                    {isVendorRole && (
+                      <p style={styles.helperText}>บทบาท Vendor ไม่จำเป็นต้องเลือกฝ่าย</p>
+                    )}
+                  </div>
+
+                  <div style={styles.fieldGroup}>
+                    <label style={styles.fieldLabel} htmlFor="user-department">
+                      แผนก
+                    </label>
+                    <select
+                      id="user-department"
+                      style={styles.select}
+                      value={userForm.department}
+                      onChange={handleDepartmentSelectChange}
+                      required={!isVendorRole}
+                      disabled={
+                        isVendorRole || !userForm.division || departmentOptions.length === 0
+                      }
+                    >
+                      <option value="" disabled>
+                        {isVendorRole
+                          ? "ไม่ต้องเลือก (Vendor)"
+                          : userForm.division
+                            ? "เลือกแผนก"
+                            : "เลือกฝ่ายก่อน"}
+                      </option>
+                      {departmentOptions.map((department) => (
+                        <option key={department.id} value={String(department.id)}>
+                          {department.name}
+                        </option>
+                      ))}
+                    </select>
+                    {!isVendorRole && userForm.division && departmentOptions.length === 0 && (
+                      <p style={styles.helperText}>ยังไม่มีแผนกในฝ่ายนี้</p>
+                    )}
+                    {isVendorRole && (
+                      <p style={styles.helperText}>บทบาท Vendor ไม่จำเป็นต้องเลือกแผนก</p>
+                    )}
                   </div>
 
                 </>

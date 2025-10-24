@@ -69,10 +69,19 @@ export async function POST(request) {
     const role = ALLOWED_ROLES.has(body?.role) ? body.role : "user";
     const email = body?.email ? String(body.email).trim() : null;
 
-    const factoryId = Number(body?.factoryId);
-    const departmentId = Number(body?.departmentId);
-    const divisionId = Number(body?.divisionId);
-    let garageId = Number(body?.garageId);
+    const toIntegerOrNull = (value) => {
+      if (value === null || value === undefined || value === "") {
+        return null;
+      }
+      const parsed = Number(value);
+      return Number.isInteger(parsed) ? parsed : null;
+    };
+
+    let factoryId = toIntegerOrNull(body?.factoryId);
+    let departmentId = toIntegerOrNull(body?.departmentId);
+    let divisionId = toIntegerOrNull(body?.divisionId);
+    let garageId = toIntegerOrNull(body?.garageId);
+    const isVendor = role === "vendor";
 
     if (!username || !password) {
       return NextResponse.json(
@@ -81,25 +90,31 @@ export async function POST(request) {
       );
     }
 
-    if (!Number.isInteger(factoryId) || factoryId <= 0) {
-      return NextResponse.json(
-        { error: "กรุณาเลือกโรงงาน" },
-        { status: 400 }
-      );
-    }
+    if (!isVendor) {
+      if (!factoryId || factoryId <= 0) {
+        return NextResponse.json(
+          { error: "กรุณาเลือกโรงงาน" },
+          { status: 400 }
+        );
+      }
 
-    if (!Number.isInteger(departmentId) || departmentId <= 0) {
-      return NextResponse.json(
-        { error: "กรุณาเลือกแผนก" },
-        { status: 400 }
-      );
-    }
+      if (!departmentId || departmentId <= 0) {
+        return NextResponse.json(
+          { error: "กรุณาเลือกแผนก" },
+          { status: 400 }
+        );
+      }
 
-    if (!Number.isInteger(divisionId) || divisionId <= 0) {
-      return NextResponse.json(
-        { error: "กรุณาเลือกฝ่าย" },
-        { status: 400 }
-      );
+      if (!divisionId || divisionId <= 0) {
+        return NextResponse.json(
+          { error: "กรุณาเลือกฝ่าย" },
+          { status: 400 }
+        );
+      }
+    } else {
+      factoryId = null;
+      departmentId = null;
+      divisionId = null;
     }
 
     const existing = await query("SELECT id FROM users WHERE username = ?", [username]);
@@ -110,71 +125,68 @@ export async function POST(request) {
       );
     }
 
-    if (role === "vendor") {
-      if (!Number.isInteger(garageId) || garageId <= 0) {
+    if (isVendor) {
+      if (garageId) {
+        const garageRows = await query(
+          "SELECT id FROM repair_garages WHERE id = ?",
+          [garageId]
+        );
+
+        if (!garageRows.length) {
+          return NextResponse.json(
+            { error: "ไม่พบอู่ที่เลือก" },
+            { status: 404 }
+          );
+        }
+      } else {
+        garageId = null;
+      }
+    } else {
+      garageId = null;
+
+      const factory = await query("SELECT id FROM factories WHERE id = ?", [factoryId]);
+      if (!factory.length) {
         return NextResponse.json(
-          { error: "กรุณาเลือกอู่สำหรับบัญชีผู้ให้บริการ" },
+          { error: "ไม่พบโรงงานที่เลือก" },
+          { status: 404 }
+        );
+      }
+
+      const divisionRows = await query(
+        "SELECT id, factory_id AS factoryId FROM divisions WHERE id = ?",
+        [divisionId]
+      );
+      if (!divisionRows.length) {
+        return NextResponse.json(
+          { error: "ไม่พบฝ่ายที่เลือก" },
+          { status: 404 }
+        );
+      }
+
+      if (divisionRows[0].factoryId !== factoryId) {
+        return NextResponse.json(
+          { error: "ฝ่ายไม่สอดคล้องกับโรงงานที่เลือก" },
           { status: 400 }
         );
       }
 
-      const garageRows = await query(
-        "SELECT id FROM repair_garages WHERE id = ?",
-        [garageId]
+      const department = await query(
+        "SELECT id, factory_id AS factoryId, division_id AS divisionId FROM departments WHERE id = ?",
+        [departmentId]
       );
-
-      if (!garageRows.length) {
+      if (!department.length) {
         return NextResponse.json(
-          { error: "ไม่พบอู่ที่เลือก" },
+          { error: "ไม่พบแผนกที่เลือก" },
           { status: 404 }
         );
       }
-    } else {
-      garageId = null;
-    }
 
-    const factory = await query("SELECT id FROM factories WHERE id = ?", [factoryId]);
-    if (!factory.length) {
-      return NextResponse.json(
-        { error: "ไม่พบโรงงานที่เลือก" },
-        { status: 404 }
-      );
-    }
-
-    const divisionRows = await query(
-      "SELECT id, factory_id AS factoryId FROM divisions WHERE id = ?",
-      [divisionId]
-    );
-    if (!divisionRows.length) {
-      return NextResponse.json(
-        { error: "ไม่พบฝ่ายที่เลือก" },
-        { status: 404 }
-      );
-    }
-
-    if (divisionRows[0].factoryId !== factoryId) {
-      return NextResponse.json(
-        { error: "ฝ่ายไม่สอดคล้องกับโรงงานที่เลือก" },
-        { status: 400 }
-      );
-    }
-
-    const department = await query(
-      "SELECT id, factory_id AS factoryId, division_id AS divisionId FROM departments WHERE id = ?",
-      [departmentId]
-    );
-    if (!department.length) {
-      return NextResponse.json(
-        { error: "ไม่พบแผนกที่เลือก" },
-        { status: 404 }
-      );
-    }
-
-    if (department[0].factoryId !== factoryId || department[0].divisionId !== divisionId) {
-      return NextResponse.json(
-        { error: "แผนกไม่สอดคล้องกับฝ่าย/โรงงานที่เลือก" },
-        { status: 400 }
-      );
+      if (department[0].factoryId !== factoryId || department[0].divisionId !== divisionId) {
+        return NextResponse.json(
+          { error: "แผนกไม่สอดคล้องกับฝ่าย/โรงงานที่เลือก" },
+          { status: 400 }
+        );
+      }
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -307,25 +319,40 @@ export async function PUT(request) {
     }
 
     const role = ALLOWED_ROLES.has(body?.role) ? body.role : null;
-    const factoryId = Number(body?.factoryId);
-    const departmentId = Number(body?.departmentId);
-    const divisionId = Number(body?.divisionId);
-    let garageId = Number(body?.garageId);
+    const toIntegerOrNull = (value) => {
+      if (value === null || value === undefined || value === "") {
+        return null;
+      }
+      const parsed = Number(value);
+      return Number.isInteger(parsed) ? parsed : null;
+    };
+
+    let factoryId = toIntegerOrNull(body?.factoryId);
+    let departmentId = toIntegerOrNull(body?.departmentId);
+    let divisionId = toIntegerOrNull(body?.divisionId);
+    let garageId = toIntegerOrNull(body?.garageId);
+    const isVendor = role === "vendor";
 
     if (!role) {
       return NextResponse.json({ error: "บทบาทผู้ใช้ไม่ถูกต้อง" }, { status: 400 });
     }
 
-    if (!Number.isInteger(factoryId) || factoryId <= 0) {
-      return NextResponse.json({ error: "กรุณาเลือกโรงงาน" }, { status: 400 });
-    }
+    if (!isVendor) {
+      if (!factoryId || factoryId <= 0) {
+        return NextResponse.json({ error: "กรุณาเลือกโรงงาน" }, { status: 400 });
+      }
 
-    if (!Number.isInteger(departmentId) || departmentId <= 0) {
-      return NextResponse.json({ error: "กรุณาเลือกแผนก" }, { status: 400 });
-    }
+      if (!departmentId || departmentId <= 0) {
+        return NextResponse.json({ error: "กรุณาเลือกแผนก" }, { status: 400 });
+      }
 
-    if (!Number.isInteger(divisionId) || divisionId <= 0) {
-      return NextResponse.json({ error: "กรุณาเลือกฝ่าย" }, { status: 400 });
+      if (!divisionId || divisionId <= 0) {
+        return NextResponse.json({ error: "กรุณาเลือกฝ่าย" }, { status: 400 });
+      }
+    } else {
+      factoryId = null;
+      departmentId = null;
+      divisionId = null;
     }
 
     const duplicate = await query("SELECT id FROM users WHERE username = ? AND id <> ?", [username, id]);
@@ -333,68 +360,65 @@ export async function PUT(request) {
       return NextResponse.json({ error: "ชื่อผู้ใช้นี้มีอยู่แล้ว" }, { status: 409 });
     }
 
-    if (role === "vendor") {
-      if (!Number.isInteger(garageId) || garageId <= 0) {
+    if (isVendor) {
+      if (garageId) {
+        const garageRows = await query(
+          "SELECT id FROM repair_garages WHERE id = ?",
+          [garageId]
+        );
+
+        if (!garageRows.length) {
+          return NextResponse.json(
+            { error: "ไม่พบอู่ที่เลือก" },
+            { status: 404 }
+          );
+        }
+      } else {
+        garageId = null;
+      }
+    } else {
+      garageId = null;
+
+      const factory = await query("SELECT id FROM factories WHERE id = ?", [factoryId]);
+      if (!factory.length) {
+        return NextResponse.json({ error: "ไม่พบโรงงานที่เลือก" }, { status: 404 });
+      }
+
+      const divisionRows = await query(
+        "SELECT id, factory_id AS factoryId FROM divisions WHERE id = ?",
+        [divisionId]
+      );
+      if (!divisionRows.length) {
         return NextResponse.json(
-          { error: "กรุณาเลือกอู่สำหรับบัญชีผู้ให้บริการ" },
+          { error: "ไม่พบฝ่ายที่เลือก" },
+          { status: 404 }
+        );
+      }
+
+      if (divisionRows[0].factoryId !== factoryId) {
+        return NextResponse.json(
+          { error: "ฝ่ายไม่สอดคล้องกับโรงงานที่เลือก" },
           { status: 400 }
         );
       }
 
-      const garageRows = await query(
-        "SELECT id FROM repair_garages WHERE id = ?",
-        [garageId]
+      const department = await query(
+        "SELECT id, factory_id AS factoryId, division_id AS divisionId FROM departments WHERE id = ?",
+        [departmentId]
       );
-
-      if (!garageRows.length) {
+      if (!department.length) {
         return NextResponse.json(
-          { error: "ไม่พบอู่ที่เลือก" },
+          { error: "ไม่พบแผนกที่เลือก" },
           { status: 404 }
         );
       }
-    } else {
-      garageId = null;
-    }
 
-    const factory = await query("SELECT id FROM factories WHERE id = ?", [factoryId]);
-    if (!factory.length) {
-      return NextResponse.json({ error: "ไม่พบโรงงานที่เลือก" }, { status: 404 });
-    }
-
-    const divisionRows = await query(
-      "SELECT id, factory_id AS factoryId FROM divisions WHERE id = ?",
-      [divisionId]
-    );
-    if (!divisionRows.length) {
-      return NextResponse.json(
-        { error: "ไม่พบฝ่ายที่เลือก" },
-        { status: 404 }
-      );
-    }
-
-    if (divisionRows[0].factoryId !== factoryId) {
-      return NextResponse.json(
-        { error: "ฝ่ายไม่สอดคล้องกับโรงงานที่เลือก" },
-        { status: 400 }
-      );
-    }
-
-    const department = await query(
-      "SELECT id, factory_id AS factoryId, division_id AS divisionId FROM departments WHERE id = ?",
-      [departmentId]
-    );
-    if (!department.length) {
-      return NextResponse.json(
-        { error: "ไม่พบแผนกที่เลือก" },
-        { status: 404 }
-      );
-    }
-
-    if (department[0].factoryId !== factoryId || department[0].divisionId !== divisionId) {
-      return NextResponse.json(
-        { error: "แผนกไม่สอดคล้องกับฝ่าย/โรงงานที่เลือก" },
-        { status: 400 }
-      );
+      if (department[0].factoryId !== factoryId || department[0].divisionId !== divisionId) {
+        return NextResponse.json(
+          { error: "แผนกไม่สอดคล้องกับฝ่าย/โรงงานที่เลือก" },
+          { status: 400 }
+        );
+      }
     }
 
     const updateFields = [

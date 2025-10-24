@@ -322,7 +322,7 @@ const buildSummary = (rows) => {
 export default function RepairTrackingClient() {
   const [repairs, setRepairs] = useState([]);
   const [statusInfo, setStatusInfo] = useState({});
-  const [garages, setGarages] = useState([]);
+  const [vendorOptions, setVendorOptions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -341,9 +341,9 @@ export default function RepairTrackingClient() {
     }
     setError('');
     try {
-      const [trackingResponse, garagesResponse] = await Promise.all([
+      const [trackingResponse, usersResponse] = await Promise.all([
         fetchJSON('/api/repair/tracking'),
-        fetchJSON('/api/user-management/garages'),
+        fetchJSON('/api/user-management/users'),
       ]);
 
       if (!trackingResponse) {
@@ -353,19 +353,32 @@ export default function RepairTrackingClient() {
       setRepairs(Array.isArray(trackingResponse.repairs) ? trackingResponse.repairs : []);
       setStatusInfo(trackingResponse.statusInfo || {});
 
-      if (garagesResponse && Array.isArray(garagesResponse.garages)) {
-        setGarages(
-          garagesResponse.garages.filter((garage) => garage?.isActive !== 0)
-        );
-      } else {
-        setGarages([]);
+      const vendorUsers = Array.isArray(usersResponse?.users)
+        ? usersResponse.users.filter((user) => user?.role === 'vendor' && user?.status !== 'inactive')
+        : [];
+
+      const normalizedVendors = [];
+      const seenGarageIds = new Set();
+      for (const vendor of vendorUsers) {
+        const garageId = Number(vendor?.garageId);
+        if (!garageId || seenGarageIds.has(garageId)) {
+          continue;
+        }
+        seenGarageIds.add(garageId);
+        normalizedVendors.push({
+          garageId,
+          username: vendor.username,
+          garageName: vendor.garageName || null,
+        });
       }
+
+      setVendorOptions(normalizedVendors);
     } catch (err) {
       console.error('Failed to load repair tracking data', err);
       setError(err?.message || 'ไม่สามารถโหลดข้อมูลได้');
       setRepairs([]);
       setStatusInfo({});
-      setGarages([]);
+      setVendorOptions([]);
     } finally {
       if (withSpinner) {
         setIsLoading(false);
@@ -707,8 +720,8 @@ export default function RepairTrackingClient() {
               filteredRepairs.map((row) => {
                 const statusMeta = statusByKey(statusInfo, row.status);
                 const priorityMeta = priorityStyle(row.priorityLevel);
-                const hasActiveGarage = row.garageId
-                  ? garages.some((garage) => Number(garage.id) === Number(row.garageId))
+                const hasActiveVendor = row.garageId
+                  ? vendorOptions.some((vendor) => Number(vendor.garageId) === Number(row.garageId))
                   : false;
                 return (
                   <tr key={row.id}>
@@ -741,19 +754,19 @@ export default function RepairTrackingClient() {
                         style={layoutStyles.select}
                         value={row.garageId ? String(row.garageId) : ''}
                         onChange={(event) => handleGarageChange(row.id, event.target.value)}
-                        disabled={assigningGarageId === row.id || garages.length === 0}
+                        disabled={assigningGarageId === row.id || vendorOptions.length === 0}
                       >
                         <option value="">
-                          {garages.length === 0 ? 'ไม่มีอู่ที่พร้อมใช้งาน' : 'เลือกอู่'}
+                          {vendorOptions.length === 0 ? 'ไม่มี Vendor ที่พร้อมใช้งาน' : 'เลือก Vendor'}
                         </option>
-                        {!hasActiveGarage && row.garageId && row.garageName && (
+                        {!hasActiveVendor && row.garageId && row.garageName && (
                           <option value={String(row.garageId)}>
-                            {row.garageName} (ปิดการใช้งาน)
+                            {row.garageName} (ไม่พบบัญชี Vendor)
                           </option>
                         )}
-                        {garages.map((garage) => (
-                          <option key={garage.id} value={String(garage.id)}>
-                            {garage.name}
+                        {vendorOptions.map((vendor) => (
+                          <option key={vendor.garageId} value={String(vendor.garageId)}>
+                            {vendor.username}
                           </option>
                         ))}
                       </select>
