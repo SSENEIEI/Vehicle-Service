@@ -18,7 +18,6 @@ import {
   FaRegImages,
   FaCarSide,
   FaIndustry,
-  FaScrewdriverWrench,
 } from "react-icons/fa6";
 
 const SUPER_ADMIN_USERNAME = "gaservice";
@@ -272,12 +271,6 @@ const createInitialUserForm = () => ({
   department: "",
   division: "",
   role: "",
-  garage: "",
-});
-
-const createInitialGarageForm = () => ({
-  name: "",
-  address: "",
 });
 
 const ROLE_LABELS = {
@@ -297,7 +290,6 @@ export default function UserManagementClient() {
   const [divisions, setDivisions] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [vehicles, setVehicles] = useState([]);
-  const [garages, setGarages] = useState([]);
 
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [isLoadingFactories, setIsLoadingFactories] = useState(true);
@@ -305,7 +297,6 @@ export default function UserManagementClient() {
   const [isLoadingDivisions, setIsLoadingDivisions] = useState(true);
   const [isLoadingDrivers, setIsLoadingDrivers] = useState(true);
   const [isLoadingVehicles, setIsLoadingVehicles] = useState(true);
-  const [isLoadingGarages, setIsLoadingGarages] = useState(true);
 
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
   const [userFormError, setUserFormError] = useState("");
@@ -352,14 +343,6 @@ export default function UserManagementClient() {
   const [isSubmittingVehicle, setIsSubmittingVehicle] = useState(false);
   const [deletingVehicleId, setDeletingVehicleId] = useState(null);
 
-  const [isGarageModalOpen, setIsGarageModalOpen] = useState(false);
-  const [garageModalMode, setGarageModalMode] = useState("create");
-  const [editingGarageId, setEditingGarageId] = useState(null);
-  const [garageForm, setGarageForm] = useState(createInitialGarageForm);
-  const [garageFormError, setGarageFormError] = useState("");
-  const [isSubmittingGarage, setIsSubmittingGarage] = useState(false);
-  const [deletingGarageId, setDeletingGarageId] = useState(null);
-
   const [imagePreviewModal, setImagePreviewModal] = useState({ isOpen: false, title: "", url: "" });
 
   const resetUserForm = () => {
@@ -388,7 +371,6 @@ export default function UserManagementClient() {
       department: user.departmentId ? String(user.departmentId) : "",
       division: user.divisionId ? String(user.divisionId) : "",
       role: user.role || "",
-      garage: user.garageId ? String(user.garageId) : "",
     });
     setUserFormError("");
     setIsEditingSuperAdmin(superAdmin);
@@ -502,6 +484,22 @@ export default function UserManagementClient() {
     });
   };
 
+  const resetVehicleForm = () => {
+    setVehicleForm((prev) => {
+      if (prev.imagePreview && prev.imagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(prev.imagePreview);
+      }
+      return {
+        name: "",
+        registration: "",
+        vehicleType: "",
+        imageFile: null,
+        imagePreview: "",
+        existingImageUrl: "",
+      };
+    });
+  };
+
   const handleOpenDriverModal = () => {
     setDriverModalMode("create");
     setEditingDriverId(null);
@@ -529,24 +527,8 @@ export default function UserManagementClient() {
     setIsDriverModalOpen(false);
     setDriverModalMode("create");
     setEditingDriverId(null);
-    resetDriverForm();
     setDriverFormError("");
-  };
-
-  const resetVehicleForm = () => {
-    setVehicleForm((prev) => {
-      if (prev.imagePreview && prev.imagePreview.startsWith("blob:")) {
-        URL.revokeObjectURL(prev.imagePreview);
-      }
-      return {
-        name: "",
-        registration: "",
-        vehicleType: "",
-        imageFile: null,
-        imagePreview: "",
-        existingImageUrl: "",
-      };
-    });
+    resetDriverForm();
   };
 
   const handleOpenVehicleModal = () => {
@@ -577,66 +559,72 @@ export default function UserManagementClient() {
     setIsVehicleModalOpen(false);
     setVehicleModalMode("create");
     setEditingVehicleId(null);
-    resetVehicleForm();
     setVehicleFormError("");
-  };
-
-  const resetGarageForm = () => {
-    setGarageForm(createInitialGarageForm());
-  };
-
-  const handleOpenGarageModal = () => {
-    setGarageModalMode("create");
-    setEditingGarageId(null);
-    resetGarageForm();
-    setGarageFormError("");
-    setIsGarageModalOpen(true);
-  };
-
-  const handleOpenEditGarageModal = (garage) => {
-    if (!garage) return;
-    setGarageModalMode("edit");
-    setEditingGarageId(garage.id ?? null);
-    setGarageForm({
-      name: garage.name || "",
-      address: garage.address || "",
-    });
-    setGarageFormError("");
-    setIsGarageModalOpen(true);
-  };
-
-  const handleCloseGarageModal = () => {
-    setIsGarageModalOpen(false);
-    setGarageModalMode("create");
-    setEditingGarageId(null);
-    resetGarageForm();
-    setGarageFormError("");
+    resetVehicleForm();
   };
 
   const handleDriverImageChange = (event) => {
     const file = event.target.files?.[0] || null;
+    const maxSize = 5 * 1024 * 1024;
+
+    if (file && file.size > maxSize) {
+      setDriverFormError("ไฟล์ต้องมีขนาดไม่เกิน 5 MB");
+      event.target.value = "";
+      return;
+    }
+
+    setDriverFormError("");
     setDriverForm((prev) => {
       if (prev.imagePreview && prev.imagePreview.startsWith("blob:")) {
         URL.revokeObjectURL(prev.imagePreview);
       }
+
+      if (!file) {
+        return {
+          ...prev,
+          imageFile: null,
+          imagePreview: prev.existingImageUrl || "",
+        };
+      }
+
+      const previewUrl = URL.createObjectURL(file);
       return {
         ...prev,
         imageFile: file,
-        imagePreview: file ? URL.createObjectURL(file) : prev.existingImageUrl || "",
+        imagePreview: previewUrl,
       };
     });
   };
 
   const handleVehicleImageChange = (event) => {
     const file = event.target.files?.[0] || null;
+    const maxSize = 5 * 1024 * 1024;
+
+    if (file && file.size > maxSize) {
+      setVehicleFormError("ไฟล์ต้องมีขนาดไม่เกิน 5 MB");
+      event.target.value = "";
+      return;
+    }
+
+    setVehicleFormError("");
     setVehicleForm((prev) => {
       if (prev.imagePreview && prev.imagePreview.startsWith("blob:")) {
         URL.revokeObjectURL(prev.imagePreview);
       }
+
+      if (!file) {
+        return {
+          ...prev,
+          imageFile: null,
+          imagePreview: prev.existingImageUrl || "",
+        };
+      }
+
+      const previewUrl = URL.createObjectURL(file);
       return {
         ...prev,
         imageFile: file,
-        imagePreview: file ? URL.createObjectURL(file) : prev.existingImageUrl || "",
+        imagePreview: previewUrl,
       };
     });
   };
@@ -728,19 +716,6 @@ export default function UserManagementClient() {
     }
   }, []);
 
-  const loadGarages = useCallback(async () => {
-    setIsLoadingGarages(true);
-    try {
-      const data = await fetchJSON("/api/user-management/garages");
-      setGarages(Array.isArray(data?.garages) ? data.garages : []);
-    } catch (error) {
-      console.error("โหลดรายชื่ออู่ไม่สำเร็จ", error);
-      setGarages([]);
-    } finally {
-      setIsLoadingGarages(false);
-    }
-  }, []);
-
   useEffect(() => {
     loadUsers();
     loadFactories();
@@ -748,8 +723,7 @@ export default function UserManagementClient() {
     loadDivisions();
     loadDrivers();
     loadVehicles();
-    loadGarages();
-  }, [loadUsers, loadFactories, loadDepartments, loadDivisions, loadDrivers, loadVehicles, loadGarages]);
+  }, [loadUsers, loadFactories, loadDepartments, loadDivisions, loadDrivers, loadVehicles]);
 
   useEffect(() => {
     if (!isDepartmentModalOpen) {
@@ -784,7 +758,6 @@ export default function UserManagementClient() {
           ...prev,
           [field]: value,
           email: value === "admin" ? prev.email : "",
-          garage: value === "vendor" ? prev.garage : "",
         };
       }
       return { ...prev, [field]: value };
@@ -818,14 +791,6 @@ export default function UserManagementClient() {
     }));
   };
 
-  const handleGarageInputChange = (field) => (event) => {
-    const { value } = event.target;
-    setGarageForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
-
   const divisionOptions = useMemo(() => {
     const factoryId = Number(userForm.factory);
     if (!factoryId) return [];
@@ -845,7 +810,6 @@ export default function UserManagementClient() {
   }, [divisions, departmentForm.factoryId]);
 
   const shouldShowEmailField = userForm.role === "admin";
-  const shouldShowGarageField = userForm.role === "vendor" && !isEditingSuperAdmin;
 
   const handleSubmitUser = async (event) => {
     event.preventDefault();
@@ -861,7 +825,6 @@ export default function UserManagementClient() {
     const factoryId = userForm.factory ? Number(userForm.factory) : null;
     const departmentId = userForm.department ? Number(userForm.department) : null;
     const divisionId = userForm.division ? Number(userForm.division) : null;
-  const garageId = userForm.garage ? Number(userForm.garage) : null;
 
     if (!username) {
       setUserFormError("กรุณากรอกชื่อผู้ใช้");
@@ -880,11 +843,6 @@ export default function UserManagementClient() {
       }
     }
 
-    if (role === "vendor" && !garageId) {
-      setUserFormError("กรุณาเลือกอู่สำหรับผู้ให้บริการ");
-      return;
-    }
-
     if (!isEditing && !password) {
       setUserFormError("กรุณากรอกรหัสผ่าน");
       return;
@@ -899,12 +857,6 @@ export default function UserManagementClient() {
       payload.factoryId = factoryId;
       payload.departmentId = departmentId;
       payload.divisionId = divisionId;
-    }
-
-    if (role === "vendor") {
-      payload.garageId = garageId;
-    } else if (!isEditingSuperAdmin) {
-      payload.garageId = null;
     }
 
     if (role === "admin") {
@@ -1266,67 +1218,6 @@ export default function UserManagementClient() {
     }
   };
 
-  const handleSubmitGarage = async (event) => {
-    event.preventDefault();
-    if (isSubmittingGarage) return;
-    setGarageFormError("");
-
-    const name = garageForm.name.trim();
-    const address = garageForm.address.trim();
-    const isEdit = garageModalMode === "edit";
-
-    if (!name) {
-      setGarageFormError("กรุณาระบุชื่ออู่");
-      return;
-    }
-
-    const payload = {
-      name,
-      address,
-    };
-
-    setIsSubmittingGarage(true);
-    try {
-      if (isEdit) {
-        if (!editingGarageId) {
-          throw new Error("ไม่พบรหัสอู่");
-        }
-        await putJSON("/api/user-management/garages", {
-          id: editingGarageId,
-          ...payload,
-        });
-      } else {
-        await postJSON("/api/user-management/garages", payload);
-      }
-      await loadGarages();
-      handleCloseGarageModal();
-    } catch (error) {
-      console.error(isEdit ? "แก้ไขข้อมูลอู่ไม่สำเร็จ" : "เพิ่มข้อมูลอู่ไม่สำเร็จ", error);
-      setGarageFormError(
-        error?.message || (isEdit ? "ไม่สามารถแก้ไขข้อมูลอู่ได้" : "ไม่สามารถเพิ่มข้อมูลอู่ได้")
-      );
-    } finally {
-      setIsSubmittingGarage(false);
-    }
-  };
-
-  const handleDeleteGarage = async (garage) => {
-    if (!garage?.id || deletingGarageId === garage.id) return;
-    const confirmed = window.confirm(`ยืนยันการลบอู่ ${garage.name || ""}?`);
-    if (!confirmed) return;
-
-    setDeletingGarageId(garage.id);
-    try {
-      await deleteJSON("/api/user-management/garages", { id: garage.id });
-      await loadGarages();
-    } catch (error) {
-      console.error("ลบข้อมูลอู่ไม่สำเร็จ", error);
-      window.alert(error?.message || "ไม่สามารถลบข้อมูลอู่ได้");
-    } finally {
-      setDeletingGarageId(null);
-    }
-  };
-
   const handleDeleteUser = async (user) => {
     if (!user?.id || deletingUserId === user.id) return;
     const confirmed = window.confirm(`ยืนยันการลบผู้ใช้ ${user.username || ""}?`);
@@ -1433,8 +1324,7 @@ export default function UserManagementClient() {
                 <th style={{ ...styles.tableHeadCell, width: "18%" }}>โรงงาน</th>
                 <th style={{ ...styles.tableHeadCell, width: "15%" }}>ฝ่าย</th>
                 <th style={{ ...styles.tableHeadCell, width: "15%" }}>แผนก</th>
-                <th style={{ ...styles.tableHeadCell, width: "12%" }}>อู่ซ่อม</th>
-                <th style={{ ...styles.tableHeadCell, width: "8%", textAlign: "center" }}>
+                <th style={{ ...styles.tableHeadCell, width: "10%", textAlign: "center" }}>
                   จัดการ
                 </th>
               </tr>
@@ -1442,13 +1332,13 @@ export default function UserManagementClient() {
             <tbody>
               {isLoadingUsers ? (
                 <tr>
-                  <td colSpan={7} style={styles.tableEmpty}>
+                  <td colSpan={6} style={styles.tableEmpty}>
                     กำลังโหลดข้อมูล...
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={styles.tableEmpty}>
+                  <td colSpan={6} style={styles.tableEmpty}>
                     ยังไม่มีข้อมูลผู้ใช้
                   </td>
                 </tr>
@@ -1469,7 +1359,6 @@ export default function UserManagementClient() {
                       <td style={styles.tableCell}>{user.factoryName || "-"}</td>
                       <td style={styles.tableCell}>{user.divisionName || "-"}</td>
                       <td style={styles.tableCell}>{user.departmentName || "-"}</td>
-                      <td style={styles.tableCell}>{user.garageName || "-"}</td>
                       <td style={{ ...styles.tableCell, textAlign: "center" }}>
                         <div style={{ ...styles.actionGroup, width: "100%", justifyContent: "center" }}>
                           <button
@@ -1752,83 +1641,6 @@ export default function UserManagementClient() {
                         >
                           <FaTrashCan size={14} />
                           {deletingDepartmentId === department.id ? " กำลังลบ..." : " ลบ"}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </section>
-
-        <section style={styles.tableCard}>
-          <header style={styles.tableTitleBar}>
-            <span style={styles.tableTitleInner}>
-              <FaScrewdriverWrench size={22} /> รายชื่ออู่
-            </span>
-            <button type="button" style={styles.actionButton("ghost")} onClick={handleOpenGarageModal}>
-              <FaScrewdriverWrench size={16} /> เพิ่มอู่ซ่อมรถ
-            </button>
-          </header>
-
-          <table style={styles.table}>
-            <thead>
-              <tr>
-                <th style={{ ...styles.tableHeadCell, width: "78%" }}>ชื่ออู่</th>
-                <th style={{ ...styles.tableHeadCell, width: "22%", textAlign: "center" }}>
-                  จัดการ
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoadingGarages ? (
-                <tr>
-                  <td colSpan={2} style={styles.tableEmpty}>
-                    กำลังโหลดข้อมูล...
-                  </td>
-                </tr>
-              ) : garages.length === 0 ? (
-                <tr>
-                  <td colSpan={2} style={styles.tableEmpty}>
-                    ยังไม่มีรายชื่ออู่
-                  </td>
-                </tr>
-              ) : (
-                garages.map((garage) => (
-                  <tr key={garage.id} style={styles.tableRow}>
-                    <td style={styles.tableCell}>
-                      <span style={styles.userCell}>
-                        <FaScrewdriverWrench size={22} color="#8fa3c7" />
-                        <span style={styles.userMeta}>
-                          <span>{garage.name}</span>
-                          {garage.address ? (
-                            <span style={styles.userMetaSecondary}>{garage.address}</span>
-                          ) : null}
-                        </span>
-                      </span>
-                    </td>
-                    <td style={{ ...styles.tableCell, textAlign: "center" }}>
-                      <div style={{ ...styles.actionGroup, width: "100%", justifyContent: "center" }}>
-                        <button
-                          type="button"
-                          style={styles.actionButton("primary")}
-                          onClick={() => handleOpenEditGarageModal(garage)}
-                        >
-                          <FaPenToSquare size={14} /> แก้ไข
-                        </button>
-                        <button
-                          type="button"
-                          style={{
-                            ...styles.actionButton("danger"),
-                            opacity: deletingGarageId === garage.id ? 0.6 : 1,
-                            cursor: deletingGarageId === garage.id ? "not-allowed" : "pointer",
-                          }}
-                          onClick={() => handleDeleteGarage(garage)}
-                          disabled={deletingGarageId === garage.id}
-                        >
-                          <FaTrashCan size={14} />
-                          {deletingGarageId === garage.id ? " กำลังลบ..." : " ลบ"}
                         </button>
                       </div>
                     </td>
@@ -2185,33 +1997,6 @@ export default function UserManagementClient() {
                     </select>
                   </div>
 
-                  {shouldShowGarageField && (
-                    <div style={styles.fieldGroup}>
-                      <label style={styles.fieldLabel} htmlFor="user-garage">
-                        อู่ซ่อม
-                      </label>
-                      <select
-                        id="user-garage"
-                        style={styles.select}
-                        value={userForm.garage}
-                        onChange={handleInputChange("garage")}
-                        required
-                        disabled={garages.length === 0 || isLoadingGarages}
-                      >
-                        <option value="" disabled>
-                          {isLoadingGarages ? "กำลังโหลดรายการอู่..." : "เลือกอู่"}
-                        </option>
-                        {garages.map((garage) => (
-                          <option key={garage.id} value={String(garage.id)}>
-                            {garage.name}
-                          </option>
-                        ))}
-                      </select>
-                      {!isLoadingGarages && garages.length === 0 && (
-                        <p style={styles.helperText}>ยังไม่มีข้อมูลอู่ กรุณาเพิ่มอู่ก่อน</p>
-                      )}
-                    </div>
-                  )}
                 </>
               )}
             </div>
@@ -2518,88 +2303,6 @@ export default function UserManagementClient() {
                 {isSubmittingDivision
                   ? "กำลังบันทึก..."
                   : divisionModalMode === "edit"
-                    ? "บันทึกการแก้ไข"
-                    : "บันทึก"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {isGarageModalOpen && (
-        <div style={styles.modalOverlay} onClick={handleCloseGarageModal}>
-          <form
-            style={styles.modalContent}
-            onClick={(event) => event.stopPropagation()}
-            onSubmit={handleSubmitGarage}
-          >
-            <header style={styles.modalHeader}>
-              <span style={styles.modalTitle}>
-                {garageModalMode === "edit" ? "แก้ไขข้อมูลอู่" : "เพิ่มอู่ซ่อมรถ"}
-              </span>
-              <button
-                type="button"
-                style={styles.modalClose}
-                onClick={handleCloseGarageModal}
-                aria-label="ปิดหน้าต่าง"
-              >
-                ×
-              </button>
-            </header>
-
-            <div style={styles.modalBody}>
-              <div style={styles.fieldGroup}>
-                <label style={styles.fieldLabel} htmlFor="garage-name">
-                  ชื่ออู่
-                </label>
-                <input
-                  id="garage-name"
-                  type="text"
-                  style={styles.input}
-                  value={garageForm.name}
-                  onChange={handleGarageInputChange("name")}
-                  required
-                />
-              </div>
-
-              <div style={styles.fieldGroup}>
-                <label style={styles.fieldLabel} htmlFor="garage-address">
-                  ที่อยู่ (ถ้ามี)
-                </label>
-                <textarea
-                  id="garage-address"
-                  style={styles.textarea}
-                  value={garageForm.address}
-                  onChange={handleGarageInputChange("address")}
-                  placeholder="บ้านเลขที่ / ถนน / เขต / จังหวัด"
-                />
-              </div>
-            </div>
-
-            {garageFormError && (
-              <p style={{ ...styles.errorText, padding: "0 26px" }}>{garageFormError}</p>
-            )}
-
-            <div style={styles.modalActions}>
-              <button
-                type="button"
-                style={styles.actionButton("ghost")}
-                onClick={handleCloseGarageModal}
-              >
-                ยกเลิก
-              </button>
-              <button
-                type="submit"
-                style={{
-                  ...styles.actionButton("primary"),
-                  opacity: isSubmittingGarage ? 0.7 : 1,
-                  pointerEvents: isSubmittingGarage ? "none" : "auto",
-                }}
-                disabled={isSubmittingGarage}
-              >
-                {isSubmittingGarage
-                  ? "กำลังบันทึก..."
-                  : garageModalMode === "edit"
                     ? "บันทึกการแก้ไข"
                     : "บันทึก"}
               </button>
