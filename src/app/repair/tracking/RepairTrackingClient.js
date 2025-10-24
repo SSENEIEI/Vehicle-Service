@@ -525,7 +525,7 @@ export default function RepairTrackingClient() {
                         {priorityMeta.label}
                       </span>
                     </td>
-                    <td style={layoutStyles.tableCell}>-</td>
+                    <td style={layoutStyles.tableCell}>{row.reporterName || '-'}</td>
                     <td style={layoutStyles.tableCell}>
                       <select
                         style={layoutStyles.select}

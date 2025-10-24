@@ -1,12 +1,12 @@
 import jwt from 'jsonwebtoken';
 import { query } from '@/lib/db';
 
-const SECRET_KEY = process.env.JWT_SECRET;
-if (!SECRET_KEY) {
-  throw new Error('Missing JWT_SECRET env var');
-}
+const SECRET_KEY = process.env.JWT_SECRET || null;
 
 export async function getUserFromRequest(request) {
+  if (!SECRET_KEY) {
+    return null;
+  }
   try {
     const header = request.headers.get('authorization') || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -26,6 +26,11 @@ export async function getUserFromRequest(request) {
 }
 
 export function signToken(payload) {
+  if (!SECRET_KEY) {
+    const err = new Error('JWT_SECRET is not configured');
+    err.status = 500;
+    throw err;
+  }
   return jwt.sign(payload, SECRET_KEY, { expiresIn: '1d' });
 }
 

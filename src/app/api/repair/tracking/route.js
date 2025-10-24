@@ -40,6 +40,8 @@ function decorateRepairRow(row) {
     vehicleType: row.vehicleType,
     priorityLevel: row.priorityLevel,
     issueDescription: row.issueDescription,
+    createdBy: row.createdBy || null,
+    reporterName: row.reporterName || row.createdBy || null,
     status,
     statusLabel: statusMeta.label,
     statusBackground: statusMeta.background,
@@ -103,9 +105,12 @@ async function fetchRepairs() {
        rr.net_total AS netTotal,
        rr.garage_id AS garageId,
        rr.updated_at AS updatedAt,
+       rr.created_by AS createdBy,
+       COALESCE(u.username, rr.created_by) AS reporterName,
        rg.name AS garageName
      FROM repair_requests rr
      LEFT JOIN repair_garages rg ON rr.garage_id = rg.id
+     LEFT JOIN users u ON u.username = rr.created_by
      ORDER BY rr.created_at DESC`
   );
 
@@ -130,9 +135,12 @@ async function fetchRepairById(id) {
        rr.net_total AS netTotal,
        rr.garage_id AS garageId,
        rr.updated_at AS updatedAt,
+       rr.created_by AS createdBy,
+       COALESCE(u.username, rr.created_by) AS reporterName,
        rg.name AS garageName
      FROM repair_requests rr
      LEFT JOIN repair_garages rg ON rr.garage_id = rg.id
+     LEFT JOIN users u ON u.username = rr.created_by
      WHERE rr.id = ?
      LIMIT 1`,
     [id]
@@ -191,8 +199,11 @@ export async function PATCH(request) {
       }
 
       const currentStatus = current.status || "pending";
-  const currentIndex = STATUS_SEQUENCE.indexOf(currentStatus);
-  const nextIndex = currentIndex >= 0 ? Math.min(currentIndex + 1, STATUS_SEQUENCE.length - 1) : 0;
+      const currentIndex = STATUS_SEQUENCE.indexOf(currentStatus);
+      const nextIndex =
+        currentIndex >= 0
+          ? Math.min(currentIndex + 1, STATUS_SEQUENCE.length - 1)
+          : 0;
       const nextStatus = STATUS_SEQUENCE[nextIndex] || "pending";
 
       if (nextStatus === currentStatus) {

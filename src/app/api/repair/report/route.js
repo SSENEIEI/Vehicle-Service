@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { getUserFromRequest } from "@/lib/auth";
 
 const CODE_PATTERN = /R-(\d+)/i;
 
@@ -51,9 +52,12 @@ function sanitizeAttachments(rawAttachments) {
 
 export async function POST(request) {
   try {
-    const body = await request.json();
+    const [user, body] = await Promise.all([
+      getUserFromRequest(request),
+      request.json(),
+    ]);
 
-    const vehicleRegistration = String(body?.vehicleRegistration || "").trim();
+  const vehicleRegistration = String(body?.vehicleRegistration || "").trim();
     const vehicleType = String(body?.vehicleType || "").trim();
     const priorityLevel = String(body?.priorityLevel || "").trim();
     const issueDescription = String(body?.issueDescription || "").trim();
@@ -84,8 +88,16 @@ export async function POST(request) {
       );
     }
 
+    if (!user) {
+      return NextResponse.json(
+        { error: "กรุณาเข้าสู่ระบบก่อนบันทึกการแจ้งซ่อม" },
+        { status: 401 }
+      );
+    }
+
     const costItems = sanitizeCostItems(body?.costItems);
     const attachments = sanitizeAttachments(body?.attachments);
+    const createdBy = String(user.username || "").trim() || null;
 
     let repairCode = String(body?.repairCode || "").trim();
     let attempts = 0;
@@ -98,8 +110,8 @@ export async function POST(request) {
           `INSERT INTO repair_requests
             (repair_code, vehicle_registration, vehicle_type, priority_level,
              issue_description, report_date, eta_date, completed_date, status, garage_id,
-             cost_items, subtotal, vat_amount, net_total, attachments)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             cost_items, subtotal, vat_amount, net_total, attachments, created_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             candidate,
             vehicleRegistration,
@@ -116,6 +128,7 @@ export async function POST(request) {
             vatAmount,
             netTotal,
             attachments.length ? JSON.stringify(attachments) : null,
+            createdBy,
           ]
         );
 

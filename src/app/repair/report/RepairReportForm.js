@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { postJSON } from "@/lib/http";
 import {
   FaCarSide,
   FaClipboardList,
@@ -417,20 +418,7 @@ export default function RepairReportForm() {
         })),
       };
 
-      const response = await fetch("/api/repair/report", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const errorPayload = await response.json().catch(() => ({}));
-        throw new Error(errorPayload?.error || "ไม่สามารถบันทึกคำขอได้");
-      }
-
-      const result = await response.json();
+      const result = await postJSON("/api/repair/report", payload);
       setSubmitMessage(
         `บันทึกคำขอซ่อมเรียบร้อย (เลขที่ ${result?.repairCode || repairCode})`
       );

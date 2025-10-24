@@ -371,6 +371,7 @@ export async function initDatabase({ seed = true } = {}) {
   await exec(`ALTER TABLE repair_requests ADD COLUMN IF NOT EXISTS status ENUM('pending', 'waiting_repair', 'completed') NOT NULL DEFAULT 'pending'`);
   await exec(`ALTER TABLE repair_requests ADD COLUMN IF NOT EXISTS garage_id INT NULL AFTER status`);
   await exec(`ALTER TABLE repair_requests ADD COLUMN IF NOT EXISTS completed_date DATE NULL AFTER eta_date`);
+  await exec(`ALTER TABLE repair_requests ADD COLUMN IF NOT EXISTS created_by VARCHAR(120) NULL AFTER attachments`);
   await exec(`ALTER TABLE repair_requests ADD INDEX IF NOT EXISTS idx_repair_requests_status (status)`);
   await exec(`ALTER TABLE repair_requests ADD INDEX IF NOT EXISTS idx_repair_requests_garage (garage_id)`);
   await exec(`ALTER TABLE repair_requests ADD CONSTRAINT fk_repair_requests_garage FOREIGN KEY (garage_id) REFERENCES repair_garages(id) ON DELETE SET NULL`);
