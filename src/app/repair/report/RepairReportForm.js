@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   FaCarSide,
   FaClipboardList,
@@ -277,7 +277,8 @@ export default function RepairReportForm() {
   const [submitError, setSubmitError] = useState("");
 
   const fileInputRef = useRef(null);
-  const fileInputId = useId();
+  const fileInputIdRef = useRef("repair-report-file-input");
+  const fileInputId = fileInputIdRef.current;
 
   const fetchNextRepairCode = useCallback(async () => {
     setIsLoadingCode(true);
