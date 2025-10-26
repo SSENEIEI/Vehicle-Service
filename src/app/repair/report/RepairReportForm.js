@@ -276,6 +276,8 @@ export default function RepairReportForm() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const [attachmentUploadError, setAttachmentUploadError] = useState("");
+  const [isUploadingAttachments, setIsUploadingAttachments] = useState(false);
 
   const fileInputRef = useRef(null);
   const fileInputIdRef = useRef("repair-report-file-input");
@@ -320,22 +322,74 @@ export default function RepairReportForm() {
   };
 
   const openFilePicker = () => {
-    if (fileInputRef.current) {
+    if (!isUploadingAttachments && fileInputRef.current) {
       fileInputRef.current.click();
     }
   };
 
-  const handleAttachmentsAdded = (event) => {
+  const handleAttachmentsAdded = async (event) => {
     const selectedFiles = Array.from(event.target.files || []);
     if (!selectedFiles.length) {
       return;
     }
-    setAttachments((prev) => [...prev, ...selectedFiles]);
-    event.target.value = "";
+
+    setAttachmentUploadError("");
+    setIsUploadingAttachments(true);
+
+    try {
+      const uploads = await Promise.all(
+        selectedFiles.map(async (file) => {
+          const formData = new FormData();
+          formData.append("file", file);
+
+          const response = await fetch("/api/repair/report/documents", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const errorPayload = await response.json().catch(() => ({}));
+            const message = errorPayload?.error || "ไม่สามารถอัปโหลดไฟล์ได้";
+            throw new Error(message);
+          }
+
+          const payload = await response.json();
+          const attachment = payload?.attachment;
+          if (!attachment?.url) {
+            throw new Error("การอัปโหลดไฟล์ไม่สำเร็จ");
+          }
+
+          return attachment;
+        })
+      );
+
+      setAttachments((prev) => [...prev, ...uploads]);
+    } catch (error) {
+      console.error("upload attachments failed", error);
+      setAttachmentUploadError(error.message || "ไม่สามารถอัปโหลดไฟล์ได้");
+    } finally {
+      setIsUploadingAttachments(false);
+      event.target.value = "";
+    }
   };
 
-  const removeAttachment = (index) => {
+  const removeAttachment = async (index) => {
+    const target = attachments[index];
     setAttachments((prev) => prev.filter((_, position) => position !== index));
+
+    if (!target?.url) {
+      return;
+    }
+
+    try {
+      await fetch("/api/repair/report/documents", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: target.url }),
+      });
+    } catch (error) {
+      console.warn("remove attachment failed", error);
+    }
   };
 
   const calculateRowTotal = (item) => {
@@ -360,16 +414,22 @@ export default function RepairReportForm() {
     setEtaDate("");
     setCostItems([createEmptyCostItem()]);
     setAttachments([]);
+    setAttachmentUploadError("");
+    setIsUploadingAttachments(false);
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (isSubmitting) {
+    if (isSubmitting || isUploadingAttachments) {
       return;
     }
 
     setSubmitError("");
     setSubmitMessage("");
+    if (isUploadingAttachments) {
+      setSubmitError("ระบบกำลังอัปโหลดไฟล์ กรุณารอสักครู่");
+      return;
+    }
 
     if (!repairCode) {
       setSubmitError(codeError || "ระบบไม่สามารถสร้างเลขแจ้งซ่อมได้");
@@ -412,6 +472,7 @@ export default function RepairReportForm() {
         vatAmount: Number(vatAmount.toFixed(2)),
         netTotal: Number(netTotal.toFixed(2)),
         attachments: attachments.map((file) => ({
+          url: file.url,
           name: file.name,
           size: file.size,
           type: file.type,
@@ -637,11 +698,17 @@ export default function RepairReportForm() {
             multiple
             style={{ display: "none" }}
             onChange={handleAttachmentsAdded}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isUploadingAttachments}
           />
           <label
             htmlFor={fileInputId}
-            style={{ ...formStyles.fileInput, display: "flex", alignItems: "center" }}
+            style={{
+              ...formStyles.fileInput,
+              display: "flex",
+              alignItems: "center",
+              opacity: isSubmitting || isUploadingAttachments ? 0.65 : 1,
+              cursor: isSubmitting || isUploadingAttachments ? "not-allowed" : "pointer",
+            }}
           >
             <span style={formStyles.iconLabel}>
               <FaPaperclip /> เพิ่มไฟล์แนบ (PDF / Excel / Word)
@@ -651,21 +718,31 @@ export default function RepairReportForm() {
             type="button"
             style={formStyles.addLineButton}
             onClick={openFilePicker}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isUploadingAttachments}
           >
             <FaPlus size={14} /> เพิ่ม
           </button>
         </div>
+        {isUploadingAttachments && (
+          <p style={{ ...formStyles.successText, color: colors.textMuted }}>
+            กำลังอัปโหลดไฟล์...
+          </p>
+        )}
         {!!attachments.length && (
           <div style={formStyles.attachmentList}>
             {attachments.map((file, index) => (
-              <div style={formStyles.attachmentItem} key={`${file.name}-${file.lastModified || index}`}>
-                <div style={formStyles.attachmentName}>
+              <div style={formStyles.attachmentItem} key={`${file.url || file.name}-${index}`}>
+                <a
+                  style={{ ...formStyles.attachmentName, textDecoration: "none" }}
+                  href={file.url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   <FaFileLines size={16} />
                   <span>
                     {file.name} ({formatFileSize(file.size)})
                   </span>
-                </div>
+                </a>
                 <button
                   type="button"
                   style={formStyles.removeAttachmentButton}
@@ -678,6 +755,9 @@ export default function RepairReportForm() {
             ))}
           </div>
         )}
+        {attachmentUploadError && (
+          <p style={formStyles.errorText}>{attachmentUploadError}</p>
+        )}
       </div>
 
       <div style={formStyles.submitRow}>
@@ -685,10 +765,10 @@ export default function RepairReportForm() {
           type="submit"
           style={{
             ...formStyles.submitButton,
-            opacity: isSubmitting ? 0.65 : 1,
-            cursor: isSubmitting ? "not-allowed" : "pointer",
+            opacity: isSubmitting || isUploadingAttachments ? 0.65 : 1,
+            cursor: isSubmitting || isUploadingAttachments ? "not-allowed" : "pointer",
           }}
-          disabled={isSubmitting}
+          disabled={isSubmitting || isUploadingAttachments}
         >
           <FaPaperPlane /> {isSubmitting ? "กำลังบันทึก..." : "บันทึกแจ้งซ่อม"}
         </button>

@@ -42,12 +42,14 @@ function sanitizeCostItems(rawItems) {
 function sanitizeAttachments(rawAttachments) {
   const attachments = Array.isArray(rawAttachments) ? rawAttachments : [];
   return attachments
-    .filter((file) => file && typeof file === "object")
+    .filter((file) => file && typeof file === "object" && file.url)
     .map((file) => ({
+      url: String(file.url || ""),
       name: String(file.name || ""),
       size: Number(file.size) || 0,
       type: String(file.type || ""),
-    }));
+    }))
+    .filter((file) => /^https?:\/\//i.test(file.url));
 }
 
 export async function POST(request) {
