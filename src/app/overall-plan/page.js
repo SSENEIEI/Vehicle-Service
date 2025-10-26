@@ -19,9 +19,9 @@ const colors = {
 	textDark: "#1c2738",
 	textMuted: "#6c7484",
 	accent: "#ffffff",
-	tagCompany: "#1b7a3e",
-	tagRental: "#0f5d9c",
-	tagRemaining: "#ad7a16",
+	tagCompany: "#f8f1d5",
+	tagRental: "#f0f5d5",
+	tagRemaining: "#f6ebd5",
 	tableHeader: "#ebf1fb",
 };
 
@@ -157,12 +157,13 @@ const styles = {
 	dayCard: {
 		display: "flex",
 		flexDirection: "column",
-		gap: "14px",
+		gap: "12px",
 		backgroundColor: colors.accent,
 		border: `1px solid ${colors.border}`,
 		borderRadius: "18px",
 		padding: "16px",
-		alignItems: "center",
+		alignItems: "stretch",
+		boxShadow: "0 4px 12px rgba(0, 0, 0, 0.04)",
 	},
 	dayNumber: {
 		fontSize: "22px",
@@ -176,16 +177,27 @@ const styles = {
 		gap: "8px",
 		fontSize: "12px",
 		color: colors.textDark,
+		width: "100%",
 	},
-	tagValueRow: (color) => ({
-		display: "flex",
+	tagValueRow: {
+		display: "grid",
+		gridTemplateColumns: "1fr auto",
 		alignItems: "center",
-		justifyContent: "space-between",
-		backgroundColor: "#f5f7fb",
-		borderRadius: "10px",
-		padding: "6px 10px",
-		color,
+		gap: "12px",
+		width: "100%",
+	},
+	tagLabel: {
+		color: colors.textMuted,
+		fontWeight: "600",
+	},
+	tagValuePill: (backgroundColor) => ({
+		backgroundColor,
+		borderRadius: "8px",
+		padding: "4px 14px",
+		minWidth: "48px",
+		textAlign: "center",
 		fontWeight: "700",
+		color: colors.textDark,
 	}),
 	tableCard: {
 		backgroundColor: colors.accent,
@@ -566,21 +578,25 @@ export default async function OverallPlanPage({ searchParams }) {
 								<div key={`day-${day.day}`} style={styles.dayCard}>
 									<span style={styles.dayNumber}>{day.day}</span>
 									<div style={styles.tagRow}>
-										<div style={styles.tagValueRow(colors.tagCompany)}>
-											<span>Company</span>
-											<span>{numberFormatter.format(day.company)}</span>
+											<div style={styles.tagValueRow}>
+												<span style={styles.tagLabel}>Company</span>
+												<span style={styles.tagValuePill(colors.tagCompany)}>
+													{numberFormatter.format(day.company)}
+												</span>
 										</div>
-										<div style={styles.tagValueRow(colors.tagRental)}>
-											<span>Rental</span>
-											<span>{numberFormatter.format(day.rental)}</span>
+											<div style={styles.tagValueRow}>
+												<span style={styles.tagLabel}>Rental</span>
+												<span style={styles.tagValuePill(colors.tagRental)}>
+													{numberFormatter.format(day.rental)}
+												</span>
 										</div>
-										<div style={styles.tagValueRow(colors.tagRemaining)}>
-											<span>Company Remaining</span>
-											<span>
-												{day.remaining === null
-													? "—"
-													: numberFormatter.format(day.remaining)}
-											</span>
+											<div style={styles.tagValueRow}>
+												<span style={styles.tagLabel}>Company Remaining</span>
+												<span style={styles.tagValuePill(colors.tagRemaining)}>
+													{day.remaining === null
+														? "—"
+														: numberFormatter.format(day.remaining)}
+												</span>
 										</div>
 									</div>
 								</div>
