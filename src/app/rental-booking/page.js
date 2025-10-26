@@ -1344,6 +1344,9 @@ export default function RentalBookingPage() {
       flightTime: point.flightTime,
       driverNote: point.driverNote,
     }));
+    const resolvedDriverId =
+      selectedDriverId && selectedDriverId !== CUSTOM_DRIVER_VALUE ? selectedDriverId : "";
+
     const payload = {
       employeeId: String(formData.get("employeeId") || "").trim(),
       requesterName: String(formData.get("requesterName") || "").trim(),
@@ -1368,6 +1371,8 @@ export default function RentalBookingPage() {
       gaStatus,
       gaRejectReason: gaRejectReason.trim(),
       bookingId: selectedBookingId,
+      selectedDriverId: resolvedDriverId,
+      gaDriverId: resolvedDriverId,
     };
 
     setConfirmError("");

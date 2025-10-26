@@ -21,6 +21,26 @@ async function parseResponse(res) {
   try { return await res.text(); } catch { return null; }
 }
 
+function createHttpError(res, data) {
+  let message = '';
+  if (typeof data === 'string') {
+    message = data.trim();
+  } else if (data && typeof data === 'object') {
+    message = data.error || data.message || '';
+  }
+  const finalMessage = message ? String(message) : `HTTP ${res.status}`;
+  const err = {
+    name: "HttpError",
+    message: finalMessage,
+    status: res.status,
+  };
+  if (data !== undefined) {
+    err.details = data;
+    err.response = data;
+  }
+  return err;
+}
+
 export async function fetchJSON(url, options = {}, extra = {}) {
   const {
     retries = 2,
@@ -56,9 +76,7 @@ export async function fetchJSON(url, options = {}, extra = {}) {
       }
       const data = await parseResponse(res);
       if (!res.ok) {
-        const err = new Error((data && (data.error || data.message)) || `HTTP ${res.status}`);
-        err.status = res.status;
-        throw err;
+        throw createHttpError(res, data);
       }
       return data;
     } catch (err) {
@@ -90,9 +108,7 @@ export async function postJSON(url, body, options = {}, extra = {}) {
     clearTimeout(tid);
     const data = await parseResponse(res);
     if (!res.ok) {
-      const err = new Error((data && (data.error || data.message)) || `HTTP ${res.status}`);
-      err.status = res.status;
-      throw err;
+      throw createHttpError(res, data);
     }
     return data;
   } catch (err) {
@@ -115,9 +131,7 @@ export async function putJSON(url, body, options = {}, extra = {}) {
     clearTimeout(tid);
     const data = await parseResponse(res);
     if (!res.ok) {
-      const err = new Error((data && (data.error || data.message)) || `HTTP ${res.status}`);
-      err.status = res.status;
-      throw err;
+      throw createHttpError(res, data);
     }
     return data;
   } catch (err) {
@@ -140,9 +154,7 @@ export async function deleteJSON(url, body = undefined, options = {}, extra = {}
     clearTimeout(tid);
     const data = await parseResponse(res);
     if (!res.ok) {
-      const err = new Error((data && (data.error || data.message)) || `HTTP ${res.status}`);
-      err.status = res.status;
-      throw err;
+      throw createHttpError(res, data);
     }
     return data;
   } catch (err) {

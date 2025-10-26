@@ -58,7 +58,8 @@ export async function GET() {
     const locks = await query(
       `SELECT id AS bookingId,
               ga_driver_id AS driverId,
-              driver_locked_until AS lockedUntil
+              driver_locked_until AS lockedUntil,
+              ga_status AS lockedStatus
          FROM bookings
         WHERE ga_driver_id IS NOT NULL
           AND driver_locked_until IS NOT NULL
@@ -84,6 +85,7 @@ export async function GET() {
         isLocked: Boolean(lock),
         lockedUntil,
         lockedByBookingId: lock?.bookingId || null,
+        lockedStatus: lock?.lockedStatus || null,
       };
     });
 
