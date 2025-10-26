@@ -8,6 +8,35 @@ const STATUS_INFO = {
   completed: { label: "ซ่อมเสร็จ", background: "#c7f1d4", color: "#1f8243" },
 };
 
+function parseAttachments(raw) {
+  if (!raw) {
+    return [];
+  }
+
+  let source = raw;
+  if (typeof raw === "string") {
+    try {
+      source = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+
+  if (!Array.isArray(source)) {
+    return [];
+  }
+
+  return source
+    .filter((file) => file && typeof file === "object" && file.url)
+    .map((file) => ({
+      url: String(file.url || ""),
+      name: String(file.name || ""),
+      size: Number(file.size) || 0,
+      type: String(file.type || ""),
+    }))
+    .filter((file) => /^https?:\/\//i.test(file.url));
+}
+
 const formatDate = (value) => {
   if (!value) return null;
   if (value instanceof Date) {
@@ -35,6 +64,7 @@ function decorateRepairRow(row) {
   if (!row) return null;
   const status = row.status || "pending";
   const statusMeta = STATUS_INFO[status] || STATUS_INFO.pending;
+  const attachments = parseAttachments(row.attachments);
 
   return {
     id: row.id,
@@ -59,6 +89,7 @@ function decorateRepairRow(row) {
     garageName: row.garageName || null,
     assignedVendorUsername: row.assignedVendorUsername || null,
     updatedAt: row.updatedAt ? formatDate(row.updatedAt) : null,
+    attachments,
   };
 }
 
@@ -127,6 +158,7 @@ async function fetchRepairs() {
        rr.vat_amount AS vatAmount,
        rr.net_total AS netTotal,
        rr.garage_id AS garageId,
+  rr.attachments,
        rr.assigned_vendor_username AS assignedVendorUsername,
        rr.updated_at AS updatedAt,
        rr.created_by AS createdBy,
@@ -158,6 +190,7 @@ async function fetchRepairById(id) {
        rr.vat_amount AS vatAmount,
        rr.net_total AS netTotal,
        rr.garage_id AS garageId,
+  rr.attachments,
        rr.assigned_vendor_username AS assignedVendorUsername,
        rr.updated_at AS updatedAt,
        rr.created_by AS createdBy,

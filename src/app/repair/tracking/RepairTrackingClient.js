@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FaMagnifyingGlass,
   FaCalendarDays,
@@ -216,6 +216,53 @@ const layoutStyles = {
     fontWeight: '600',
     fontSize: '14px',
   },
+  manageButton: (disabled = false) => ({
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '8px',
+    borderRadius: '12px',
+    border: `1px solid ${colors.primary}`,
+    backgroundColor: colors.surface,
+    color: colors.primary,
+    padding: '8px 14px',
+    fontWeight: '700',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.65 : 1,
+  }),
+  documentListWrapper: {
+    padding: '16px 20px',
+    backgroundColor: colors.accent,
+    borderRadius: '16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
+  documentListHeader: {
+    fontWeight: '700',
+    color: colors.textDark,
+  },
+  documentItem: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '12px 16px',
+    borderRadius: '12px',
+    backgroundColor: colors.surface,
+    border: `1px solid ${colors.border}`,
+    gap: '12px',
+  },
+  documentMeta: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    color: colors.textDark,
+    fontSize: '14px',
+  },
+  documentLink: {
+    color: colors.primary,
+    textDecoration: 'underline',
+    fontWeight: '700',
+  },
 };
 
 const currencyFormatter = new Intl.NumberFormat('th-TH', {
@@ -290,6 +337,22 @@ const parseDateOnly = (value) => {
   return new Date(year, month - 1, day);
 };
 
+const formatFileSize = (bytes) => {
+  const size = Number(bytes) || 0;
+  if (size <= 0) {
+    return '-';
+  }
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let current = size;
+  let unitIndex = 0;
+  while (current >= 1024 && unitIndex < units.length - 1) {
+    current /= 1024;
+    unitIndex += 1;
+  }
+  const precision = unitIndex === 0 ? 0 : 2;
+  return `${current.toFixed(precision)} ${units[unitIndex]}`;
+};
+
 const buildSummary = (rows) => {
   const summary = {
     total: 0,
@@ -332,6 +395,7 @@ export default function RepairTrackingClient() {
   const [searchTerm, setSearchTerm] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [expandedDocumentRowId, setExpandedDocumentRowId] = useState(null);
 
   const loadData = useCallback(async (withSpinner = true) => {
     if (withSpinner) {
@@ -375,12 +439,14 @@ export default function RepairTrackingClient() {
       normalizedVendors.sort((a, b) => a.username.localeCompare(b.username, 'th-TH'));
 
       setVendorOptions(normalizedVendors);
+      setExpandedDocumentRowId(null);
     } catch (err) {
       console.error('Failed to load repair tracking data', err);
       setError(err?.message || 'ไม่สามารถโหลดข้อมูลได้');
       setRepairs([]);
       setStatusInfo({});
       setVendorOptions([]);
+      setExpandedDocumentRowId(null);
     } finally {
       if (withSpinner) {
         setIsLoading(false);
@@ -702,25 +768,26 @@ export default function RepairTrackingClient() {
               <th style={layoutStyles.tableHeadCell}>วันซ่อมเสร็จ</th>
               <th style={layoutStyles.tableHeadCell}>ระยะเวลาดำเนินการ</th>
               <th style={layoutStyles.tableHeadCell}>ค่าใช้จ่าย</th>
+              <th style={layoutStyles.tableHeadCell}>จัดการ</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={12} style={layoutStyles.tableEmpty}>
+                <td colSpan={13} style={layoutStyles.tableEmpty}>
                   กำลังโหลดข้อมูล...
                 </td>
               </tr>
             ) : filteredRepairs.length === 0 ? (
               <tr>
-                <td colSpan={12} style={layoutStyles.tableEmpty}>
+                <td colSpan={13} style={layoutStyles.tableEmpty}>
                   {hasActiveFilters
                     ? 'ไม่พบรายการที่ตรงกับเงื่อนไขการค้นหา'
                     : 'ยังไม่มีรายการแจ้งซ่อม'}
                 </td>
               </tr>
             ) : (
-              filteredRepairs.map((row) => {
+               filteredRepairs.map((row) => {
                 const statusMeta = statusByKey(statusInfo, row.status);
                 const priorityMeta = priorityStyle(row.priorityLevel);
                 const hasActiveVendor = row.assignedVendorUsername
@@ -728,64 +795,114 @@ export default function RepairTrackingClient() {
                       (vendor) => vendor.username.toLowerCase() === row.assignedVendorUsername.toLowerCase()
                     )
                   : false;
+                const attachments = Array.isArray(row.attachments) ? row.attachments : [];
+                const hasAttachments = attachments.length > 0;
+                const isExpanded = expandedDocumentRowId === row.id;
                 return (
-                  <tr key={row.id}>
-                    <td style={layoutStyles.tableCell}>{row.repairCode}</td>
-                    <td style={layoutStyles.tableCell}>{row.vehicleRegistration}</td>
-                    <td style={layoutStyles.tableCell}>{row.vehicleType || '-'}</td>
-                    <td style={layoutStyles.tableCell}>{row.issueDescription || '-'}</td>
-                    <td style={layoutStyles.tableCell}>
-                      <button
-                        type="button"
-                        style={layoutStyles.statusButton(
-                          statusMeta.background,
-                          statusMeta.color,
-                          row.status === 'completed' || updatingStatusId === row.id
-                        )}
-                        onClick={() => handleAdvanceStatus(row.id)}
-                        disabled={row.status === 'completed' || updatingStatusId === row.id}
-                      >
-                        {updatingStatusId === row.id ? 'กำลังอัปเดต...' : statusMeta.label}
-                      </button>
-                    </td>
-                    <td style={layoutStyles.tableCell}>
-                      <span style={layoutStyles.badge(priorityMeta.background, priorityMeta.color)}>
-                        {priorityMeta.label}
-                      </span>
-                    </td>
-                    <td style={layoutStyles.tableCell}>{row.reporterName || '-'}</td>
-                    <td style={layoutStyles.tableCell}>
-                      <select
-                        style={layoutStyles.select}
-                        value={row.assignedVendorUsername || ''}
-                        onChange={(event) => handleVendorAssign(row.id, event.target.value)}
-                        disabled={
-                          assigningVendorRowId === row.id ||
-                          (vendorOptions.length === 0 && !row.assignedVendorUsername)
-                        }
-                      >
-                        <option value="">
-                          {vendorOptions.length === 0 ? 'ไม่มี Vendor ที่พร้อมใช้งาน' : 'เลือก Vendor'}
-                        </option>
-                        {!hasActiveVendor && row.assignedVendorUsername && (
-                          <option value={row.assignedVendorUsername}>
-                            {row.assignedVendorUsername} (ไม่พบบัญชี Vendor)
+                  <Fragment key={row.id}>
+                    <tr>
+                      <td style={layoutStyles.tableCell}>{row.repairCode}</td>
+                      <td style={layoutStyles.tableCell}>{row.vehicleRegistration}</td>
+                      <td style={layoutStyles.tableCell}>{row.vehicleType || '-'}</td>
+                      <td style={layoutStyles.tableCell}>{row.issueDescription || '-'}</td>
+                      <td style={layoutStyles.tableCell}>
+                        <button
+                          type="button"
+                          style={layoutStyles.statusButton(
+                            statusMeta.background,
+                            statusMeta.color,
+                            row.status === 'completed' || updatingStatusId === row.id
+                          )}
+                          onClick={() => handleAdvanceStatus(row.id)}
+                          disabled={row.status === 'completed' || updatingStatusId === row.id}
+                        >
+                          {updatingStatusId === row.id ? 'กำลังอัปเดต...' : statusMeta.label}
+                        </button>
+                      </td>
+                      <td style={layoutStyles.tableCell}>
+                        <span style={layoutStyles.badge(priorityMeta.background, priorityMeta.color)}>
+                          {priorityMeta.label}
+                        </span>
+                      </td>
+                      <td style={layoutStyles.tableCell}>{row.reporterName || '-'}</td>
+                      <td style={layoutStyles.tableCell}>
+                        <select
+                          style={layoutStyles.select}
+                          value={row.assignedVendorUsername || ''}
+                          onChange={(event) => handleVendorAssign(row.id, event.target.value)}
+                          disabled={
+                            assigningVendorRowId === row.id ||
+                            (vendorOptions.length === 0 && !row.assignedVendorUsername)
+                          }
+                        >
+                          <option value="">
+                            {vendorOptions.length === 0 ? 'ไม่มี Vendor ที่พร้อมใช้งาน' : 'เลือก Vendor'}
                           </option>
-                        )}
-                        {vendorOptions.map((vendor) => (
-                          <option key={vendor.key} value={vendor.username}>
-                            {vendor.username}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td style={layoutStyles.tableCell}>{formatDateLabel(row.reportDate)}</td>
-                    <td style={layoutStyles.tableCell}>{formatDateLabel(row.etaDate)}</td>
-                    <td style={layoutStyles.tableCell}>
-                      {computeDurationLabel(row.reportDate, row.etaDate)}
-                    </td>
-                    <td style={layoutStyles.tableCell}>{formatCurrency(row.netTotal)}</td>
-                  </tr>
+                          {!hasActiveVendor && row.assignedVendorUsername && (
+                            <option value={row.assignedVendorUsername}>
+                              {row.assignedVendorUsername} (ไม่พบบัญชี Vendor)
+                            </option>
+                          )}
+                          {vendorOptions.map((vendor) => (
+                            <option key={vendor.key} value={vendor.username}>
+                              {vendor.username}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td style={layoutStyles.tableCell}>{formatDateLabel(row.reportDate)}</td>
+                      <td style={layoutStyles.tableCell}>{formatDateLabel(row.etaDate)}</td>
+                      <td style={layoutStyles.tableCell}>
+                        {computeDurationLabel(row.reportDate, row.etaDate)}
+                      </td>
+                      <td style={layoutStyles.tableCell}>{formatCurrency(row.netTotal)}</td>
+                      <td style={layoutStyles.tableCell}>
+                        <button
+                          type="button"
+                          style={layoutStyles.manageButton(!hasAttachments)}
+                          onClick={() => {
+                            if (!hasAttachments) {
+                              window.alert('ไม่มีเอกสารแนบสำหรับรายการนี้');
+                              return;
+                            }
+                            setExpandedDocumentRowId((current) =>
+                              current === row.id ? null : row.id
+                            );
+                          }}
+                          disabled={!hasAttachments}
+                        >
+                          <FaPaperclip /> เอกสาร
+                        </button>
+                      </td>
+                    </tr>
+                    {isExpanded && hasAttachments && (
+                      <tr key={`${row.id}-documents`}>
+                        <td style={layoutStyles.tableCell} colSpan={13}>
+                          <div style={layoutStyles.documentListWrapper}>
+                            <span style={layoutStyles.documentListHeader}>
+                              เอกสารแนบทั้งหมด ({attachments.length} รายการ)
+                            </span>
+                            {attachments.map((file, index) => (
+                              <div key={`${row.id}-doc-${index}`} style={layoutStyles.documentItem}>
+                                <div style={layoutStyles.documentMeta}>
+                                  <span>{file.name || `เอกสารที่ ${index + 1}`}</span>
+                                  <span>{formatFileSize(file.size)}</span>
+                                </div>
+                                <a
+                                  href={file.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={layoutStyles.documentLink}
+                                >
+                                  เปิดไฟล์
+                                </a>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })
             )}
