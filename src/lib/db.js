@@ -79,6 +79,15 @@ let pool;
 let schemaInitialized = false;
 let initializing = null;
 
+const TRANSIENT_CONNECTION_ERRORS = new Set([
+  'PROTOCOL_CONNECTION_LOST',
+  'ECONNRESET',
+  'ECONNREFUSED',
+  'ECONNABORTED',
+  'ETIMEDOUT',
+  'EPIPE',
+]);
+
 function buildPoolConfig(includeDatabase = true) {
   const config = {
     host: HOST,
@@ -125,6 +134,40 @@ async function ensurePool() {
   }
   pool = mysql.createPool(buildPoolConfig(true));
   return pool;
+}
+
+async function resetPool({ resetSchema = false } = {}) {
+  if (pool) {
+    try {
+      await pool.end();
+    } catch {
+      // ignore close errors and force recreation
+    }
+    pool = null;
+  }
+  if (resetSchema) {
+    schemaInitialized = false;
+    initializing = null;
+  }
+}
+
+function shouldResetConnection(error) {
+  const code = error?.code;
+  if (code && TRANSIENT_CONNECTION_ERRORS.has(code)) {
+    return true;
+  }
+  const message = String(error?.message || '').toLowerCase();
+  if (!message) {
+    return false;
+  }
+  return (
+    message.includes('read econnreset') ||
+    message.includes('write econnreset') ||
+    message.includes('server has gone away') ||
+    message.includes('connection lost') ||
+    message.includes('fatal error') ||
+    message.includes('connection was closed')
+  );
 }
 
 async function seedDefaults(db) {
@@ -537,12 +580,15 @@ export async function query(sql, params = []) {
       message.includes('Unknown database');
 
     if (missingSchema) {
-      schemaInitialized = false;
-      initializing = null;
-      if (pool) {
-        try { await pool.end(); } catch {}
-        pool = null;
-      }
+      await resetPool({ resetSchema: true });
+      await initDatabase();
+      const db = await ensurePool();
+      const [rows] = await db.execute(sql, params);
+      return rows;
+    }
+
+    if (shouldResetConnection(error)) {
+      await resetPool();
       await initDatabase();
       const db = await ensurePool();
       const [rows] = await db.execute(sql, params);
