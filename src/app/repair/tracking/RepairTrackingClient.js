@@ -763,7 +763,7 @@ export default function RepairTrackingClient() {
               <th style={layoutStyles.tableHeadCell}>สถานะการซ่อม</th>
               <th style={layoutStyles.tableHeadCell}>ลำดับความสำคัญ</th>
               <th style={layoutStyles.tableHeadCell}>ผู้แจ้ง</th>
-              <th style={layoutStyles.tableHeadCell}>ผู้ให้บริการ (Vendor)</th>
+              <th style={layoutStyles.tableHeadCell}>อู่/ศูนย์บริการ</th>
               <th style={layoutStyles.tableHeadCell}>วันแจ้งซ่อม</th>
               <th style={layoutStyles.tableHeadCell}>วันซ่อมเสร็จ</th>
               <th style={layoutStyles.tableHeadCell}>ระยะเวลาดำเนินการ</th>
@@ -836,11 +836,11 @@ export default function RepairTrackingClient() {
                           }
                         >
                           <option value="">
-                            {vendorOptions.length === 0 ? 'ไม่มี Vendor ที่พร้อมใช้งาน' : 'เลือก Vendor'}
+                            {vendorOptions.length === 0 ? 'ไม่มีอู่/ศูนย์บริการที่พร้อมใช้งาน' : 'เลือกอู่/ศูนย์บริการ'}
                           </option>
                           {!hasActiveVendor && row.assignedVendorUsername && (
                             <option value={row.assignedVendorUsername}>
-                              {row.assignedVendorUsername} (ไม่พบบัญชี Vendor)
+                              {row.assignedVendorUsername} (ไม่พบบัญชีอู่/ศูนย์บริการ)
                             </option>
                           )}
                           {vendorOptions.map((vendor) => (
