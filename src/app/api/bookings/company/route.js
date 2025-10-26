@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import sgMail from "@sendgrid/mail";
 import { initDatabase, query } from "@/lib/db";
+import {
+  ensureBookingLockColumns,
+  ensureVehicleAvailable,
+  ensureDriverAvailable,
+  releaseExpiredLocks,
+  addHours,
+  addDays,
+  formatDateTimeForSql,
+} from "@/lib/bookingLocks";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -82,6 +91,72 @@ function parsePositiveInt(value, label, { defaultValue = null } = {}) {
     return defaultValue;
   }
   throw new Error(`${label} ต้องเป็นจำนวนเต็มมากกว่า 0`);
+}
+
+function parseOptionalPositiveInt(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const raw = String(value).trim();
+  if (!raw) {
+    return null;
+  }
+  const num = Number.parseInt(raw, 10);
+  return Number.isInteger(num) && num > 0 ? num : null;
+}
+
+function toLocalDate(dateStr, timeStr = "00:00:00") {
+  if (!dateStr) {
+    return null;
+  }
+  const [year, month, day] = dateStr.split("-").map((part) => Number.parseInt(part, 10));
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return null;
+  }
+  const timeParts = String(timeStr || "00:00:00")
+    .split(":")
+    .map((part) => Number.parseInt(part, 10) || 0);
+  const [hour, minute, second] = [timeParts[0] || 0, timeParts[1] || 0, timeParts[2] || 0];
+  return new Date(year, month - 1, day, hour, minute, second);
+}
+
+function deriveTravelWindow(pickupPoint, dropOffPoints = []) {
+  const now = new Date();
+  const starts = [];
+  const ends = [];
+
+  if (pickupPoint?.travelDate) {
+    const pickupDepart = toLocalDate(pickupPoint.travelDate, pickupPoint.departTime || "00:00:00");
+    if (pickupDepart) {
+      starts.push(pickupDepart);
+      ends.push(pickupDepart);
+    }
+  }
+
+  for (const point of dropOffPoints) {
+    if (!point) {
+      continue;
+    }
+    const baseDate = point.travelDate || pickupPoint?.travelDate || null;
+    if (baseDate) {
+      const departMoment = toLocalDate(baseDate, point.departTime || pickupPoint?.departTime || "00:00:00");
+      if (departMoment) {
+        starts.push(departMoment);
+      }
+      const arriveMoment = toLocalDate(baseDate, point.arriveTime || point.departTime || "23:59:59");
+      if (arriveMoment) {
+        ends.push(arriveMoment);
+      }
+    }
+  }
+
+  starts.sort((a, b) => a.getTime() - b.getTime());
+  ends.sort((a, b) => a.getTime() - b.getTime());
+
+  const start = starts.length ? starts[0] : now;
+  const end = ends.length ? ends[ends.length - 1] : start;
+
+  return { start, end };
 }
 
 function normalizePickupPoint(input) {
@@ -309,6 +384,12 @@ function invalidResponse(message, status = 400) {
 
 export async function GET(request) {
   await initDatabase();
+  await ensureBookingLockColumns();
+  try {
+    await releaseExpiredLocks();
+  } catch (error) {
+    console.error("[bookings/company] releaseExpiredLocks failed", error);
+  }
   const { searchParams } = new URL(request.url);
   const idParam = searchParams.get("id");
   const statusParam = searchParams.get("status");
@@ -331,12 +412,15 @@ export async function GET(request) {
                 b.contact_phone AS contactPhone,
                 b.contact_email AS contactEmail,
                 b.cargo_details AS cargoDetails,
+                b.ga_driver_id AS gaDriverId,
                 b.ga_driver_name AS gaDriverName,
                 b.ga_driver_phone AS gaDriverPhone,
                 b.ga_vehicle_id AS gaVehicleId,
                 b.ga_vehicle_type AS gaVehicleType,
                 b.ga_status AS gaStatus,
                 b.ga_reject_reason AS gaRejectReason,
+                b.vehicle_locked_until AS vehicleLockedUntil,
+                b.driver_locked_until AS driverLockedUntil,
                 b.created_at AS createdAt,
                 f.name AS factoryName,
                 d.name AS divisionName,
@@ -451,6 +535,7 @@ export async function GET(request) {
         b.factory_id AS factoryId,
         b.division_id AS divisionId,
         b.department_id AS departmentId,
+  b.ga_driver_id AS gaDriverId,
         b.ga_status AS gaStatus,
         b.created_at AS createdAt,
         f.name AS factoryName,
@@ -478,6 +563,12 @@ export async function GET(request) {
 
 export async function POST(request) {
   await initDatabase();
+  await ensureBookingLockColumns();
+  try {
+    await releaseExpiredLocks();
+  } catch (error) {
+    console.error("[bookings/company] releaseExpiredLocks failed", error);
+  }
 
   let body;
   try {
@@ -499,6 +590,7 @@ export async function POST(request) {
   const cargoDetails = String(body?.cargoDetails || "").trim();
   const additionalEmailsRaw = Array.isArray(body?.additionalEmails) ? body.additionalEmails : [];
 
+  const gaDriverId = parseOptionalPositiveInt(body?.gaDriverId ?? body?.selectedDriverId);
   const gaDriverName = String(body?.gaDriverName || "").trim();
   const gaDriverPhone = String(body?.gaDriverPhone || "").trim();
   const gaVehicleTypeRaw = String(body?.gaVehicleType || "").trim();
@@ -651,15 +743,49 @@ export async function POST(request) {
   if (isUpdate) {
     try {
       const [existingBooking] = await query(
-        `SELECT id, booking_type, reference_code
+        `SELECT id,
+                booking_type AS bookingType,
+                reference_code AS referenceCode,
+                ga_vehicle_id AS gaVehicleId,
+                ga_driver_id AS gaDriverId,
+                ga_status AS gaStatus,
+                vehicle_locked_until AS vehicleLockedUntil,
+                driver_locked_until AS driverLockedUntil
          FROM bookings
          WHERE id = ?
          LIMIT 1`,
         [bookingIdRaw]
       );
 
-      if (!existingBooking || existingBooking.booking_type !== "company") {
+      if (!existingBooking || existingBooking.bookingType !== "company") {
         return invalidResponse("ไม่พบข้อมูลการจอง", 404);
+      }
+
+      const { start: travelStart, end: travelEnd } = deriveTravelWindow(pickupPoint, dropOffPoints);
+
+      let vehicleLockUntilValue = null;
+      let driverLockUntilValue = null;
+      const nextDriverId = gaStatus === "approved" ? gaDriverId : null;
+
+      if (gaStatus === "approved") {
+        await ensureVehicleAvailable(gaVehicleId, { excludeBookingId: bookingIdRaw });
+        if (gaDriverId) {
+          await ensureDriverAvailable(gaDriverId, { excludeBookingId: bookingIdRaw });
+        }
+
+        const now = new Date();
+        const effectiveEnd = travelEnd && travelEnd instanceof Date ? travelEnd : travelStart;
+        const baseMoment = effectiveEnd && effectiveEnd > now ? effectiveEnd : now;
+        const vehicleLockDate = addHours(baseMoment, 2);
+        vehicleLockUntilValue = formatDateTimeForSql(vehicleLockDate);
+
+        if (gaDriverId) {
+          const driverLockDate = addDays(baseMoment, 1);
+          driverLockUntilValue = formatDateTimeForSql(driverLockDate);
+        }
+      } else {
+        vehicleLockUntilValue = null;
+        driverLockUntilValue = null;
       }
 
       await query(
@@ -672,12 +798,15 @@ export async function POST(request) {
                contact_phone = ?,
                contact_email = ?,
                cargo_details = ?,
+               ga_driver_id = ?,
                ga_driver_name = ?,
                ga_driver_phone = ?,
                ga_vehicle_id = ?,
                ga_vehicle_type = ?,
                ga_status = ?,
-               ga_reject_reason = ?
+               ga_reject_reason = ?,
+               vehicle_locked_until = ?,
+               driver_locked_until = ?
          WHERE id = ?`,
         [
           employeeId,
@@ -688,12 +817,15 @@ export async function POST(request) {
           contactPhone,
           contactEmail,
           cargoDetails || null,
+          nextDriverId,
           gaDriverName || null,
           gaDriverPhone || null,
           gaVehicleId,
           gaVehicleTypeRaw || null,
           gaStatus,
           gaStatus === "rejected" ? gaRejectReason || null : null,
+          vehicleLockUntilValue,
+          gaStatus === "approved" ? driverLockUntilValue : null,
           bookingIdRaw,
         ]
       );
@@ -717,7 +849,7 @@ export async function POST(request) {
         );
       }
 
-      const referenceCode = existingBooking.reference_code;
+  const referenceCode = existingBooking.referenceCode;
       const statusLabel = gaStatus === "approved" ? "อนุมัติ" : "ไม่อนุมัติ";
       const templateData = {
         bookingType: "company",
@@ -793,11 +925,14 @@ export async function POST(request) {
           "GA Admin",
           `status-${gaStatus}`,
           JSON.stringify({
+            gaDriverId: nextDriverId,
             gaDriverName,
             gaDriverPhone,
             gaVehicleId,
             gaVehicleType: gaVehicleTypeRaw,
             gaRejectReason: gaStatus === "rejected" ? gaRejectReason : null,
+            vehicleLockedUntil: vehicleLockUntilValue,
+            driverLockedUntil: gaStatus === "approved" ? driverLockUntilValue : null,
           }),
         ]
       );
@@ -807,6 +942,8 @@ export async function POST(request) {
         bookingId: bookingIdRaw,
         referenceCode,
         gaStatus,
+        vehicleLockedUntil: vehicleLockUntilValue,
+        driverLockedUntil: gaStatus === "approved" ? driverLockUntilValue : null,
       });
     } catch (error) {
       console.error("[bookings/company] update error", error);
@@ -821,6 +958,21 @@ export async function POST(request) {
 
   let bookingId;
   try {
+    let vehicleLockDuringCreate = null;
+    let driverLockDuringCreate = null;
+
+    const lockReference = new Date();
+
+    if (gaVehicleId) {
+      await ensureVehicleAvailable(gaVehicleId);
+      vehicleLockDuringCreate = formatDateTimeForSql(addHours(lockReference, 2));
+    }
+
+    if (gaDriverId) {
+      await ensureDriverAvailable(gaDriverId);
+      driverLockDuringCreate = formatDateTimeForSql(addHours(lockReference, 2));
+    }
+
     const insertResult = await query(
       `INSERT INTO bookings (
          reference_code,
@@ -833,15 +985,18 @@ export async function POST(request) {
          contact_phone,
          contact_email,
          cargo_details,
+         ga_driver_id,
          ga_driver_name,
          ga_driver_phone,
          ga_vehicle_id,
          ga_vehicle_type,
+         vehicle_locked_until,
+         driver_locked_until,
          ga_status,
          ga_reject_reason,
          created_by
-       ) VALUES (?, 'company', ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 'pending', NULL, ?)`
-        , [
+       ) VALUES (?, 'company', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?)`
+      , [
           referenceCode,
           employeeId,
           requesterName,
@@ -851,6 +1006,13 @@ export async function POST(request) {
           contactPhone,
           contactEmail,
           cargoDetails || null,
+          gaDriverId,
+          gaDriverName || null,
+          gaDriverPhone || null,
+          gaVehicleId,
+          gaVehicleTypeRaw || null,
+          vehicleLockDuringCreate,
+          driverLockDuringCreate,
           requesterName,
         ]
     );
@@ -922,11 +1084,25 @@ export async function POST(request) {
         bookingId,
         requesterName || employeeId,
         "created",
-        JSON.stringify({ contactPhone, contactEmail, additionalEmails }),
+        JSON.stringify({
+          contactPhone,
+          contactEmail,
+          additionalEmails,
+          gaVehicleId,
+          gaDriverId,
+          vehicleLockedUntil: vehicleLockDuringCreate,
+          driverLockedUntil: driverLockDuringCreate,
+        }),
       ]
     );
 
-    return NextResponse.json({ success: true, bookingId, referenceCode });
+    return NextResponse.json({
+      success: true,
+      bookingId,
+      referenceCode,
+      vehicleLockedUntil: vehicleLockDuringCreate,
+      driverLockedUntil: driverLockDuringCreate,
+    });
   } catch (error) {
     if (bookingId) {
       try {

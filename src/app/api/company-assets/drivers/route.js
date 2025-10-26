@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Buffer } from "node:buffer";
 import { put, del } from "@vercel/blob";
 import { initDatabase, query } from "@/lib/db";
+import { ensureBookingLockColumns, releaseExpiredLocks } from "@/lib/bookingLocks";
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -36,6 +37,13 @@ async function uploadImage(file, folder) {
 export async function GET() {
   try {
     await initDatabase();
+    await ensureBookingLockColumns();
+    try {
+      await releaseExpiredLocks();
+    } catch (error) {
+      console.error("[drivers] releaseExpiredLocks failed", error);
+    }
+
     const drivers = await query(
       `SELECT id,
               name,
@@ -47,7 +55,39 @@ export async function GET() {
        ORDER BY created_at DESC`
     );
 
-    return NextResponse.json({ drivers });
+    const locks = await query(
+      `SELECT id AS bookingId,
+              ga_driver_id AS driverId,
+              driver_locked_until AS lockedUntil
+         FROM bookings
+        WHERE ga_driver_id IS NOT NULL
+          AND driver_locked_until IS NOT NULL
+          AND driver_locked_until > NOW()`
+    );
+
+    const lockMap = new Map();
+    for (const lock of locks) {
+      if (!lock?.driverId) {
+        continue;
+      }
+      lockMap.set(Number(lock.driverId), lock);
+    }
+
+    const enrichedDrivers = drivers.map((driver) => {
+      const lock = lockMap.get(Number(driver.id));
+      let lockedUntil = lock?.lockedUntil || null;
+      if (lockedUntil instanceof Date) {
+        lockedUntil = lockedUntil.toISOString();
+      }
+      return {
+        ...driver,
+        isLocked: Boolean(lock),
+        lockedUntil,
+        lockedByBookingId: lock?.bookingId || null,
+      };
+    });
+
+    return NextResponse.json({ drivers: enrichedDrivers });
   } catch (error) {
     console.error("[drivers] GET error", error);
     return NextResponse.json(

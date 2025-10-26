@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Buffer } from "node:buffer";
 import { put, del } from "@vercel/blob";
 import { initDatabase, query } from "@/lib/db";
+import { ensureBookingLockColumns, releaseExpiredLocks } from "@/lib/bookingLocks";
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 
@@ -36,6 +37,13 @@ async function uploadImage(file, folder) {
 export async function GET() {
   try {
     await initDatabase();
+    await ensureBookingLockColumns();
+    try {
+      await releaseExpiredLocks();
+    } catch (error) {
+      console.error("[vehicles] releaseExpiredLocks failed", error);
+    }
+
     const vehicles = await query(
       `SELECT id,
               name,
@@ -48,7 +56,41 @@ export async function GET() {
        ORDER BY created_at DESC`
     );
 
-    return NextResponse.json({ vehicles });
+    const locks = await query(
+      `SELECT id AS bookingId,
+              ga_vehicle_id AS vehicleId,
+              vehicle_locked_until AS lockedUntil,
+              ga_status AS lockedStatus
+         FROM bookings
+        WHERE ga_vehicle_id IS NOT NULL
+          AND vehicle_locked_until IS NOT NULL
+          AND vehicle_locked_until > NOW()`
+    );
+
+    const lockMap = new Map();
+    for (const lock of locks) {
+      if (!lock?.vehicleId) {
+        continue;
+      }
+      lockMap.set(Number(lock.vehicleId), lock);
+    }
+
+    const enrichedVehicles = vehicles.map((vehicle) => {
+      const lock = lockMap.get(Number(vehicle.id));
+      let lockedUntil = lock?.lockedUntil || null;
+      if (lockedUntil instanceof Date) {
+        lockedUntil = lockedUntil.toISOString();
+      }
+      return {
+        ...vehicle,
+        isLocked: Boolean(lock),
+        lockedUntil,
+        lockedByBookingId: lock?.bookingId || null,
+        lockedStatus: lock?.lockedStatus || null,
+      };
+    });
+
+    return NextResponse.json({ vehicles: enrichedVehicles });
   } catch (error) {
     console.error("[vehicles] GET error", error);
     return NextResponse.json(

@@ -157,11 +157,14 @@ CREATE TABLE IF NOT EXISTS `bookings` (
   `rental_company` VARCHAR(180) NULL,
   `rental_cost` DECIMAL(12,2) NULL,
   `rental_payment_type` VARCHAR(60) NULL,
+  `ga_driver_id` INT NULL,
   `ga_driver_name` VARCHAR(120) NULL,
   `ga_driver_phone` VARCHAR(32) NULL,
   `ga_vehicle_id` INT NULL,
   `ga_vehicle_type` VARCHAR(80) NULL,
-  `ga_status` ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
+  `vehicle_locked_until` DATETIME NULL,
+  `driver_locked_until` DATETIME NULL,
+  `ga_status` ENUM('pending', 'approved', 'rejected', 'cancelled') NOT NULL DEFAULT 'pending',
   `ga_reject_reason` TEXT NULL,
   `created_by` VARCHAR(64) NOT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -169,7 +172,8 @@ CREATE TABLE IF NOT EXISTS `bookings` (
   CONSTRAINT `fk_bookings_factory` FOREIGN KEY (`factory_id`) REFERENCES `factories`(`id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_bookings_division` FOREIGN KEY (`division_id`) REFERENCES `divisions`(`id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_bookings_department` FOREIGN KEY (`department_id`) REFERENCES `departments`(`id`) ON DELETE RESTRICT,
-  CONSTRAINT `fk_bookings_vehicle` FOREIGN KEY (`ga_vehicle_id`) REFERENCES `company_vehicles`(`id`) ON DELETE SET NULL
+  CONSTRAINT `fk_bookings_vehicle` FOREIGN KEY (`ga_vehicle_id`) REFERENCES `company_vehicles`(`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_bookings_driver` FOREIGN KEY (`ga_driver_id`) REFERENCES `company_drivers`(`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `booking_points` (
