@@ -165,6 +165,15 @@ const styles = {
 		alignItems: "stretch",
 		boxShadow: "0 4px 12px rgba(0, 0, 0, 0.04)",
 	},
+	dayCardPlaceholder: {
+		display: "flex",
+		flexDirection: "column",
+		gap: "12px",
+		backgroundColor: "transparent",
+		borderRadius: "18px",
+		padding: "16px",
+		visibility: "hidden",
+	},
 	dayNumber: {
 		fontSize: "22px",
 		fontWeight: "700",
@@ -463,6 +472,8 @@ export default async function OverallPlanPage({ searchParams }) {
 	}
 
 	const daysInMonth = endDate.getDate();
+	const startDayOfWeek = startDate.getDay();
+	const mondayFirstOffset = (startDayOfWeek + 6) % 7;
 	const calendarDays = Array.from({ length: daysInMonth }, (_, index) => {
 		const day = index + 1;
 		const key = `${targetYear}-${String(targetMonthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -477,6 +488,15 @@ export default async function OverallPlanPage({ searchParams }) {
 			remaining,
 		};
 	});
+	const leadingPlaceholders = Array.from({ length: mondayFirstOffset }, () => null);
+	let calendarCells = [...leadingPlaceholders, ...calendarDays];
+	const trailingCount = calendarCells.length % 7 === 0 ? 0 : 7 - (calendarCells.length % 7);
+	if (trailingCount > 0) {
+		calendarCells = [
+			...calendarCells,
+			...Array.from({ length: trailingCount }, () => null),
+		];
+	}
 
 	const tableRows = monthlyBookings.map((booking) => {
 		const travelDate = booking.travelDate
@@ -574,33 +594,44 @@ export default async function OverallPlanPage({ searchParams }) {
 							))}
 						</div>
 						<div style={styles.calendarGrid}>
-							{calendarDays.map((day) => (
-								<div key={`day-${day.day}`} style={styles.dayCard}>
-									<span style={styles.dayNumber}>{day.day}</span>
-									<div style={styles.tagRow}>
+							{calendarCells.map((cell, index) => {
+								if (!cell) {
+									return (
+										<div
+											key={`placeholder-${index}`}
+											style={styles.dayCardPlaceholder}
+											aria-hidden="true"
+										/>
+									);
+								}
+								return (
+									<div key={`day-${cell.day}`} style={styles.dayCard}>
+										<span style={styles.dayNumber}>{cell.day}</span>
+										<div style={styles.tagRow}>
 											<div style={styles.tagValueRow}>
 												<span style={styles.tagLabel}>Company</span>
 												<span style={styles.tagValuePill(colors.tagCompany)}>
-													{numberFormatter.format(day.company)}
+													{numberFormatter.format(cell.company)}
 												</span>
-										</div>
+											</div>
 											<div style={styles.tagValueRow}>
 												<span style={styles.tagLabel}>Rental</span>
 												<span style={styles.tagValuePill(colors.tagRental)}>
-													{numberFormatter.format(day.rental)}
+													{numberFormatter.format(cell.rental)}
 												</span>
-										</div>
+											</div>
 											<div style={styles.tagValueRow}>
 												<span style={styles.tagLabel}>Company Remaining</span>
 												<span style={styles.tagValuePill(colors.tagRemaining)}>
-													{day.remaining === null
+													{cell.remaining === null
 														? "—"
-														: numberFormatter.format(day.remaining)}
+														: numberFormatter.format(cell.remaining)}
 												</span>
+											</div>
 										</div>
 									</div>
-								</div>
-							))}
+								);
+							})}
 						</div>
 					</div>
 				</section>
