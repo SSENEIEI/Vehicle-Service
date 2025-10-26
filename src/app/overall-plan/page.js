@@ -1,5 +1,6 @@
 import DashboardShell from "@/components/DashboardShell";
 import { menuItems } from "@/lib/menuItems";
+import { initDatabase, query } from "@/lib/db";
 import {
 	FaClipboardList,
 	FaChevronLeft,
@@ -18,10 +19,24 @@ const colors = {
 	textDark: "#1c2738",
 	textMuted: "#6c7484",
 	accent: "#ffffff",
-	tagCompany: "#000",
-	tagRental: "#000",
-	tagRemaining: "#000",
+	tagCompany: "#1b7a3e",
+	tagRental: "#0f5d9c",
+	tagRemaining: "#ad7a16",
 	tableHeader: "#ebf1fb",
+};
+
+const STATUS_LABELS = {
+	approved: "อนุมัติ",
+	pending: "รออนุมัติ",
+	rejected: "ไม่อนุมัติ",
+	cancelled: "ยกเลิก",
+};
+
+const STATUS_BADGE_THEME = {
+	approved: { background: "#dbf5e4", color: "#1b7a3e" },
+	pending: { background: "#fff7d6", color: "#ad7a16" },
+	rejected: { background: "#ffe2e0", color: "#c33333" },
+	cancelled: { background: "#e5e7eb", color: "#4b5563" },
 };
 
 const styles = {
@@ -93,6 +108,10 @@ const styles = {
 		gap: "12px",
 		flexWrap: "wrap",
 	},
+	linkButton: {
+		textDecoration: "none",
+		color: colors.textDark,
+	},
 	pillButton: {
 		display: "inline-flex",
 		alignItems: "center",
@@ -103,7 +122,6 @@ const styles = {
 		backgroundColor: colors.accent,
 		fontWeight: "700",
 		color: colors.textDark,
-		cursor: "pointer",
 	},
 	arrowButton: {
 		width: "42px",
@@ -128,29 +146,29 @@ const styles = {
 		color: colors.textMuted,
 		fontWeight: "700",
 		fontSize: "16px",
-			textAlign: "center",
+		textAlign: "center",
 	},
 	calendarGrid: {
-			display: "grid",
-			gridTemplateColumns: "repeat(7, minmax(140px, 1fr))",
-			gap: "14px",
-			justifyItems: "stretch",
+		display: "grid",
+		gridTemplateColumns: "repeat(7, minmax(140px, 1fr))",
+		gap: "14px",
+		justifyItems: "stretch",
 	},
 	dayCard: {
 		display: "flex",
 		flexDirection: "column",
-			gap: "14px",
+		gap: "14px",
 		backgroundColor: colors.accent,
 		border: `1px solid ${colors.border}`,
 		borderRadius: "18px",
 		padding: "16px",
-			alignItems: "center",
+		alignItems: "center",
 	},
 	dayNumber: {
-			fontSize: "22px",
-			fontWeight: "700",
-			color: colors.textDark,
-			textAlign: "center",
+		fontSize: "22px",
+		fontWeight: "700",
+		color: colors.textDark,
+		textAlign: "center",
 	},
 	tagRow: {
 		display: "flex",
@@ -163,7 +181,7 @@ const styles = {
 		display: "flex",
 		alignItems: "center",
 		justifyContent: "space-between",
-		backgroundColor: "#f7f4e3",
+		backgroundColor: "#f5f7fb",
 		borderRadius: "10px",
 		padding: "6px 10px",
 		color,
@@ -201,7 +219,6 @@ const styles = {
 		backgroundColor: "#1f8243",
 		color: "#ffffff",
 		fontWeight: "700",
-		cursor: "pointer",
 	},
 	table: {
 		width: "100%",
@@ -222,36 +239,22 @@ const styles = {
 		color: colors.textDark,
 		borderBottom: `1px solid ${colors.border}`,
 	},
-	statusBadge: (status) => {
-		const palette = {
-			Approved: { background: "#dbf5e4", color: "#1b7a3e" },
-			Pending: { background: "#fff7d6", color: "#ad7a16" },
-			"Not Approved": { background: "#ffe2e0", color: "#c33333" },
-		};
-
-		const choice = palette[status] || palette.Pending;
-
+	statusBadge: (statusKey) => {
+		const theme = STATUS_BADGE_THEME[statusKey] || STATUS_BADGE_THEME.pending;
 		return {
 			display: "inline-flex",
 			alignItems: "center",
 			justifyContent: "center",
 			padding: "6px 14px",
 			borderRadius: "999px",
-			backgroundColor: choice.background,
-			color: choice.color,
+			backgroundColor: theme.background,
+			color: theme.color,
 			fontWeight: "700",
 			fontSize: "13px",
 			minWidth: "104px",
 		};
 	},
 };
-
-const summaryCards = [
-	{ label: "Total Bookings", value: "9", note: "รวมทั้งหมดในเดือนนี้" },
-	{ label: "Company", value: "9", note: "จำนวนจองรถบริษัทฯ" },
-	{ label: "Rental", value: "9", note: "จำนวนจองรถเช่า" },
-	{ label: "Cost (Rental)", value: "฿9,300", note: "รวมค่าใช้จ่ายรถเช่า" },
-];
 
 const weekdayLabels = [
 	"จันทร์",
@@ -263,82 +266,256 @@ const weekdayLabels = [
 	"อาทิตย์",
 ];
 
-const calendarDays = Array.from({ length: 31 }, (_, index) => index + 1);
+const numberFormatter = new Intl.NumberFormat("th-TH");
+const currencyFormatter = new Intl.NumberFormat("th-TH", {
+	style: "currency",
+	currency: "THB",
+});
 
-const tableRows = [
-	{
-		date: "1-10-2025",
-		time: "09:00-15:00",
-		type: "Company",
-		province: "กรุงเทพฯ",
-		department: "GA",
-		plant: "AC",
-		status: "Approved",
-		cost: "1,500",
-	},
-	{
-		date: "2-10-2025",
-		time: "09:00-15:00",
-		type: "Rental",
-		province: "กรุงเทพฯ",
-		department: "GA",
-		plant: "AC",
-		status: "Pending",
-		cost: "1,500",
-	},
-	{
-		date: "3-10-2025",
-		time: "09:00-15:00",
-		type: "Company",
-		province: "กรุงเทพฯ",
-		department: "GA",
-		plant: "AC",
-		status: "Not Approved",
-		cost: "1,500",
-	},
-	{
-		date: "4-10-2025",
-		time: "09:00-15:00",
-		type: "Rental",
-		province: "กรุงเทพฯ",
-		department: "GA",
-		plant: "AC",
-		status: "Not Approved",
-		cost: "1,500",
-	},
-	{
-		date: "5-10-2025",
-		time: "09:00-15:00",
-		type: "Rental",
-		province: "กรุงเทพฯ",
-		department: "GA",
-		plant: "AC",
-		status: "Pending",
-		cost: "1,500",
-	},
-	{
-		date: "6-10-2025",
-		time: "09:00-15:00",
-		type: "Company",
-		province: "กรุงเทพฯ",
-		department: "GA",
-		plant: "AC",
-		status: "Approved",
-		cost: "1,500",
-	},
-	{
-		date: "7-10-2025",
-		time: "09:00-15:00",
-		type: "Company",
-		province: "กรุงเทพฯ",
-		department: "GA",
-		plant: "AC",
-		status: "Approved",
-		cost: "1,500",
-	},
-];
+function formatThaiDate(value) {
+	if (!value) {
+		return "-";
+	}
+	try {
+		const date = value instanceof Date ? value : new Date(value);
+		if (Number.isNaN(date.getTime())) {
+			return "-";
+		}
+		return new Intl.DateTimeFormat("th-TH", {
+			day: "numeric",
+			month: "numeric",
+			year: "numeric",
+		}).format(date);
+	} catch {
+		return "-";
+	}
+}
 
-export default function OverallPlanPage() {
+function formatTime(value) {
+	if (!value) {
+		return "";
+	}
+	const str = typeof value === "string" ? value : String(value);
+	if (!str.includes(":")) {
+		return str;
+	}
+	const [hours, minutes] = str.split(":");
+	return `${hours.padStart(2, "0")}:${minutes.padStart(2, "0")}`;
+}
+
+function formatTimeRange(start, end) {
+	const startLabel = formatTime(start);
+	const endLabel = formatTime(end);
+	if (startLabel && endLabel) {
+		return `${startLabel} - ${endLabel}`;
+	}
+	return startLabel || endLabel || "-";
+}
+
+function buildMonthLinks(monthIndex, year) {
+	const prevDate = new Date(year, monthIndex - 1, 1);
+	const nextDate = new Date(year, monthIndex + 1, 1);
+	const formatLink = (date) => `?month=${date.getMonth() + 1}&year=${date.getFullYear()}`;
+	return {
+		prevHref: formatLink(prevDate),
+		nextHref: formatLink(nextDate),
+		monthName: new Intl.DateTimeFormat("th-TH", { month: "long" }).format(
+			new Date(year, monthIndex, 1)
+		),
+		yearDisplay: year + 543,
+	};
+}
+
+async function fetchMonthlyBookings(startDate, endDate) {
+	return query(
+		`SELECT b.id,
+				b.booking_type AS bookingType,
+				b.ga_status AS gaStatus,
+				b.rental_cost AS rentalCost,
+				b.ga_vehicle_type AS gaVehicleType,
+				b.ga_driver_name AS gaDriverName,
+				b.ga_driver_phone AS gaDriverPhone,
+				b.reference_code AS referenceCode,
+				b.requester_name AS requesterName,
+				b.requester_emp_no AS requesterEmpNo,
+				b.contact_phone AS contactPhone,
+				b.contact_email AS contactEmail,
+				pickup.travel_date AS travelDate,
+				pickup.depart_time AS departTime,
+				pickup.location_province AS pickupProvince,
+				dropoff.arrive_time AS arriveTime,
+				dropoff.location_province AS dropoffProvince,
+				factories.name AS factoryName,
+				divisions.name AS divisionName,
+				departments.name AS departmentName
+		FROM bookings b
+		JOIN (
+			SELECT bp.booking_id,
+					MIN(bp.travel_date) AS travel_date,
+					MIN(bp.depart_time) AS depart_time,
+					SUBSTRING_INDEX(
+						GROUP_CONCAT(bp.province ORDER BY bp.travel_date, bp.sequence_no SEPARATOR '||'),
+						'||',
+						1
+					) AS location_province
+			FROM booking_points bp
+			WHERE bp.point_type = 'pickup'
+			GROUP BY bp.booking_id
+		) pickup ON pickup.booking_id = b.id
+		LEFT JOIN (
+			SELECT bp.booking_id,
+					MAX(bp.arrive_time) AS arrive_time,
+					SUBSTRING_INDEX(
+						GROUP_CONCAT(bp.province ORDER BY bp.travel_date DESC, bp.sequence_no DESC SEPARATOR '||'),
+						'||',
+						1
+					) AS location_province
+			FROM booking_points bp
+			WHERE bp.point_type = 'dropoff'
+			GROUP BY bp.booking_id
+		) dropoff ON dropoff.booking_id = b.id
+		LEFT JOIN factories ON factories.id = b.factory_id
+		LEFT JOIN divisions ON divisions.id = b.division_id
+		LEFT JOIN departments ON departments.id = b.department_id
+		WHERE pickup.travel_date BETWEEN ? AND ?
+		ORDER BY pickup.travel_date ASC, pickup.depart_time ASC, b.id ASC`,
+		[startDate, endDate]
+	);
+}
+
+async function fetchVehicleCapacity() {
+	const [row] = await query(
+		"SELECT COUNT(*) AS totalVehicles FROM company_vehicles"
+	);
+	return Number(row?.totalVehicles || 0);
+}
+
+export default async function OverallPlanPage({ searchParams }) {
+	const now = new Date();
+	const monthParam = Number.parseInt(searchParams?.month, 10);
+	const yearParam = Number.parseInt(searchParams?.year, 10);
+	const targetMonthIndex = Number.isInteger(monthParam)
+		? Math.min(Math.max(monthParam - 1, 0), 11)
+		: now.getMonth();
+	const targetYear = Number.isInteger(yearParam) ? yearParam : now.getFullYear();
+	const startDate = new Date(targetYear, targetMonthIndex, 1);
+	const endDate = new Date(targetYear, targetMonthIndex + 1, 0);
+	const startDateStr = `${startDate.getFullYear()}-${String(targetMonthIndex + 1).padStart(2, "0")}-01`;
+	const endDateStr = `${endDate.getFullYear()}-${String(targetMonthIndex + 1).padStart(2, "0")}-${String(
+		endDate.getDate()
+	).padStart(2, "0")}`;
+
+	await initDatabase();
+	const [monthlyBookings, totalVehicles] = await Promise.all([
+		fetchMonthlyBookings(startDateStr, endDateStr),
+		fetchVehicleCapacity(),
+	]);
+
+	const summary = {
+		total: 0,
+		company: 0,
+		rental: 0,
+		rentalCost: 0,
+	};
+	const dailyMap = new Map();
+
+	for (const booking of monthlyBookings) {
+		const travelDate = booking.travelDate
+			? new Date(booking.travelDate)
+			: null;
+		const isValidDate = travelDate && !Number.isNaN(travelDate.getTime());
+		summary.total += 1;
+		if (booking.bookingType === "company") {
+			summary.company += 1;
+		} else if (booking.bookingType === "rental") {
+			summary.rental += 1;
+			if (booking.rentalCost !== null && booking.rentalCost !== undefined) {
+				summary.rentalCost += Number(booking.rentalCost) || 0;
+			}
+		}
+		if (!isValidDate) {
+			continue;
+		}
+		const dateKey = `${travelDate.getFullYear()}-${String(
+			travelDate.getMonth() + 1
+		).padStart(2, "0")}-${String(travelDate.getDate()).padStart(2, "0")}`;
+		if (!dailyMap.has(dateKey)) {
+			dailyMap.set(dateKey, { company: 0, rental: 0 });
+		}
+		const entry = dailyMap.get(dateKey);
+		if (booking.bookingType === "company") {
+			entry.company += 1;
+		} else if (booking.bookingType === "rental") {
+			entry.rental += 1;
+		}
+	}
+
+	const daysInMonth = endDate.getDate();
+	const calendarDays = Array.from({ length: daysInMonth }, (_, index) => {
+		const day = index + 1;
+		const key = `${targetYear}-${String(targetMonthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+		const counts = dailyMap.get(key) || { company: 0, rental: 0 };
+		const remaining = totalVehicles
+			? Math.max(totalVehicles - counts.company, 0)
+			: null;
+		return {
+			day,
+			company: counts.company,
+			rental: counts.rental,
+			remaining,
+		};
+	});
+
+	const tableRows = monthlyBookings.map((booking) => {
+		const travelDate = booking.travelDate
+			? new Date(booking.travelDate)
+			: null;
+		const statusKey = booking.gaStatus || "pending";
+		return {
+			date: formatThaiDate(travelDate),
+			time: formatTimeRange(booking.departTime, booking.arriveTime),
+			type: booking.bookingType === "company" ? "Company" : "Rental",
+			province: booking.dropoffProvince || booking.pickupProvince || "-",
+			department: booking.departmentName || "-",
+			plant: booking.factoryName || "-",
+			statusKey,
+			statusLabel: STATUS_LABELS[statusKey] || STATUS_LABELS.pending,
+			cost:
+				booking.bookingType === "rental" && booking.rentalCost !== null
+					? currencyFormatter.format(Number(booking.rentalCost))
+					: "—",
+		};
+	});
+
+	const monthContext = buildMonthLinks(targetMonthIndex, targetYear);
+	const monthLabelWithYear = new Intl.DateTimeFormat("th-TH", {
+		month: "long",
+		year: "numeric",
+	}).format(new Date(targetYear, targetMonthIndex, 1));
+
+	const summaryCards = [
+		{
+			label: "Total Bookings",
+			value: numberFormatter.format(summary.total),
+			note: `รวมทั้งหมดในเดือน${monthContext.monthName}`,
+		},
+		{
+			label: "Company",
+			value: numberFormatter.format(summary.company),
+			note: "จำนวนจองรถบริษัทฯ",
+		},
+		{
+			label: "Rental",
+			value: numberFormatter.format(summary.rental),
+			note: "จำนวนจองรถเช่า",
+		},
+		{
+			label: "Cost (Rental)",
+			value: currencyFormatter.format(summary.rentalCost),
+			note: "รวมค่าใช้จ่ายรถเช่า",
+		},
+	];
+
 	return (
 		<DashboardShell
 			menuItems={menuItems}
@@ -357,14 +534,14 @@ export default function OverallPlanPage() {
 							</p>
 						</div>
 						<div style={styles.monthControls}>
-							<button type="button" style={styles.arrowButton}>
+							<a href={monthContext.prevHref} style={{ ...styles.arrowButton, ...styles.linkButton }}>
 								<FaChevronLeft size={18} />
-							</button>
-							<button type="button" style={styles.pillButton}>ตุลาคม</button>
-							<button type="button" style={styles.arrowButton}>
+							</a>
+							<span style={styles.pillButton}>{monthContext.monthName}</span>
+							<a href={monthContext.nextHref} style={{ ...styles.arrowButton, ...styles.linkButton }}>
 								<FaChevronRight size={18} />
-							</button>
-							<button type="button" style={styles.pillButton}>2025</button>
+							</a>
+							<span style={styles.pillButton}>{monthContext.yearDisplay}</span>
 						</div>
 					</div>
 
@@ -386,20 +563,24 @@ export default function OverallPlanPage() {
 						</div>
 						<div style={styles.calendarGrid}>
 							{calendarDays.map((day) => (
-								<div key={`day-${day}`} style={styles.dayCard}>
-									<span style={styles.dayNumber}>{day}</span>
+								<div key={`day-${day.day}`} style={styles.dayCard}>
+									<span style={styles.dayNumber}>{day.day}</span>
 									<div style={styles.tagRow}>
 										<div style={styles.tagValueRow(colors.tagCompany)}>
 											<span>Company</span>
-											<span>—</span>
+											<span>{numberFormatter.format(day.company)}</span>
 										</div>
 										<div style={styles.tagValueRow(colors.tagRental)}>
 											<span>Rental</span>
-											<span>—</span>
+											<span>{numberFormatter.format(day.rental)}</span>
 										</div>
 										<div style={styles.tagValueRow(colors.tagRemaining)}>
 											<span>Company Remaining</span>
-											<span>—</span>
+											<span>
+												{day.remaining === null
+													? "—"
+													: numberFormatter.format(day.remaining)}
+											</span>
 										</div>
 									</div>
 								</div>
@@ -410,8 +591,8 @@ export default function OverallPlanPage() {
 
 				<section style={styles.tableCard}>
 					<div style={styles.tableHeaderRow}>
-						<h3 style={styles.tableTitle}>รายการทั้งหมดเดือน</h3>
-						<button type="button" style={styles.pillButton}>ตุลาคม</button>
+						<h3 style={styles.tableTitle}>รายการทั้งหมดเดือน {monthLabelWithYear}</h3>
+						<span style={styles.pillButton}>{monthContext.monthName}</span>
 						<div style={styles.tableControls}>
 							<button type="button" style={styles.exportButton}>Export Excel</button>
 						</div>
@@ -437,20 +618,28 @@ export default function OverallPlanPage() {
 							</tr>
 						</thead>
 						<tbody>
-							{tableRows.map((row, index) => (
-								<tr key={`booking-row-${index}`}>
-									<td style={styles.tableCell}>{row.date}</td>
-									<td style={styles.tableCell}>{row.time}</td>
-									<td style={styles.tableCell}>{row.type}</td>
-									<td style={styles.tableCell}>{row.province}</td>
-									<td style={styles.tableCell}>{row.department}</td>
-									<td style={styles.tableCell}>{row.plant}</td>
-									<td style={styles.tableCell}>
-										<span style={styles.statusBadge(row.status)}>{row.status}</span>
+							{tableRows.length === 0 ? (
+								<tr>
+									<td style={styles.tableCell} colSpan={8}>
+										ยังไม่มีข้อมูลการจองในเดือนนี้
 									</td>
-									<td style={styles.tableCell}>{row.cost}</td>
 								</tr>
-							))}
+							) : (
+								tableRows.map((row, index) => (
+									<tr key={`booking-row-${index}`}>
+										<td style={styles.tableCell}>{row.date}</td>
+										<td style={styles.tableCell}>{row.time}</td>
+										<td style={styles.tableCell}>{row.type}</td>
+										<td style={styles.tableCell}>{row.province}</td>
+										<td style={styles.tableCell}>{row.department}</td>
+										<td style={styles.tableCell}>{row.plant}</td>
+										<td style={styles.tableCell}>
+											<span style={styles.statusBadge(row.statusKey)}>{row.statusLabel}</span>
+										</td>
+										<td style={styles.tableCell}>{row.cost}</td>
+									</tr>
+								))
+							)}
 						</tbody>
 					</table>
 				</section>
