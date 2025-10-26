@@ -1,9 +1,13 @@
 import DashboardShell from "@/components/DashboardShell";
 import { menuItems } from "@/lib/menuItems";
 import { initDatabase, query } from "@/lib/db";
+import DailyScheduleStatusControl from "./DailyScheduleStatusControl";
+import {
+  ensureDailyScheduleStatusTable,
+  getDailyScheduleStatus,
+} from "@/lib/dailyScheduleStatus";
 import {
   FaCalendarDay,
-  FaCheck,
   FaClipboardList,
   FaFileExcel,
 } from "react-icons/fa6";
@@ -35,6 +39,8 @@ const colors = {
   statusProgressBg: "#fff1d0",
   statusEmpty: "#475569",
   statusEmptyBg: "#e2e8f0",
+  statusOnProcess: "#dc2626",
+  statusOnProcessBg: "#fee2e2",
 };
 
 const dashboardStyles = {
@@ -92,6 +98,10 @@ const dashboardStyles = {
         backgroundColor: colors.statusCompleteBg,
         color: colors.statusComplete,
       },
+      on_process: {
+        backgroundColor: colors.statusOnProcessBg,
+        color: colors.statusOnProcess,
+      },
       progress: {
         backgroundColor: colors.statusProgressBg,
         color: colors.statusProgress,
@@ -101,7 +111,7 @@ const dashboardStyles = {
         color: colors.statusEmpty,
       },
     };
-    const choice = palette[variant] || palette.empty;
+    const choice = palette[variant] || palette.on_process;
     return {
       display: "inline-flex",
       alignItems: "center",
@@ -411,21 +421,6 @@ async function fetchDailyScheduleData(targetDateStr) {
   });
 }
 
-function deriveStatusVariant(bookings) {
-  if (!bookings.length) {
-    return { variant: "empty", label: "No Bookings", icon: <FaClipboardList size={12} /> };
-  }
-  const approvedCount = bookings.filter((item) => item.gaStatus === "approved").length;
-  if (approvedCount === bookings.length) {
-    return { variant: "complete", label: "Complete", icon: <FaCheck size={12} /> };
-  }
-  return {
-    variant: "progress",
-    label: "In Progress",
-    icon: <FaClipboardList size={12} />,
-  };
-}
-
 function buildFilterHref(dateStr, type) {
   const params = new URLSearchParams();
   if (dateStr) {
@@ -450,12 +445,16 @@ export default async function DailySchedulePage({ searchParams }) {
   const selectedDateLabel = formatThaiDate(selectedDate);
 
   await initDatabase();
+  await ensureDailyScheduleStatusTable();
   const allBookings = await fetchDailyScheduleData(selectedDateStr);
   const filteredBookings = filterType === "all"
     ? allBookings
     : allBookings.filter((booking) => booking.bookingType === filterType);
-
-  const statusInfo = deriveStatusVariant(filteredBookings);
+  const scheduleStatus = await getDailyScheduleStatus(selectedDateStr);
+  const statusStylesByVariant = {
+    on_process: dashboardStyles.statusBadge("on_process"),
+    complete: dashboardStyles.statusBadge("complete"),
+  };
 
   const maxPickupPoints = Math.max(
     1,
@@ -528,10 +527,11 @@ export default async function DailySchedulePage({ searchParams }) {
               <span style={dashboardStyles.statusLabel}>
                 สถานะแผนการจัดรถประจำวัน
               </span>
-              <span style={dashboardStyles.statusBadge(statusInfo.variant)}>
-                {statusInfo.icon}
-                {statusInfo.label}
-              </span>
+              <DailyScheduleStatusControl
+                scheduleDate={selectedDateStr}
+                initialStatus={scheduleStatus.status}
+                variantStyles={statusStylesByVariant}
+              />
               <form method="get" style={dashboardStyles.dateForm}>
                 <input
                   type="date"

@@ -16,6 +16,23 @@ function sanitizeEmail(value) {
   return EMAIL_REGEX.test(email) ? email : null;
 }
 
+function isSystemEmail(email) {
+  if (!email) {
+    return false;
+  }
+  const normalized = email.trim().toLowerCase();
+  const candidates = [
+    process.env.BOOKING_SYSTEM_EMAIL,
+    process.env.BOOKING_RENTAL_ADMIN_EMAIL,
+    process.env.BOOKING_ADMIN_EMAIL,
+    process.env.ADMIN_EMAIL,
+    process.env.SMTP_FROM,
+  ]
+    .map((value) => (typeof value === "string" ? value.trim().toLowerCase() : ""))
+    .filter(Boolean);
+  return candidates.includes(normalized);
+}
+
 function requiredText(value, label) {
   const text = typeof value === "string" ? value.trim() : "";
   if (!text) {
@@ -403,8 +420,12 @@ export async function GET(request) {
         new Set(notificationRows.map((row) => sanitizeEmail(row?.email)))
       ).filter(Boolean);
 
+      const systemEmail = sanitizeEmail(process.env.BOOKING_SYSTEM_EMAIL || process.env.BOOKING_RENTAL_ADMIN_EMAIL || process.env.BOOKING_ADMIN_EMAIL || process.env.ADMIN_EMAIL);
       const additionalEmails = notificationEmails.filter(
-        (email) => email !== booking.contactEmail
+        (email) =>
+          email !== booking.contactEmail &&
+          email !== systemEmail &&
+          !isSystemEmail(email)
       );
 
       const pointRows = await query(
@@ -629,11 +650,23 @@ export async function POST(request) {
     return invalidResponse(error?.message || "ข้อมูลเส้นทางไม่ถูกต้อง");
   }
 
+  const systemEmail = sanitizeEmail(
+    process.env.BOOKING_SYSTEM_EMAIL ||
+      process.env.BOOKING_RENTAL_ADMIN_EMAIL ||
+      process.env.BOOKING_ADMIN_EMAIL ||
+      process.env.ADMIN_EMAIL
+  );
   const additionalEmails = Array.from(
     new Set(
       additionalEmailsRaw
         .map((email) => sanitizeEmail(email))
-        .filter((email) => Boolean(email) && email !== contactEmail)
+        .filter(
+          (email) =>
+            Boolean(email) &&
+            email !== contactEmail &&
+            email !== systemEmail &&
+            !isSystemEmail(email)
+        )
     )
   );
 

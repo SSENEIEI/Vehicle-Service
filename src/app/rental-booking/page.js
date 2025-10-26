@@ -1224,7 +1224,7 @@ export default function RentalBookingPage() {
       if (!detail?.booking) {
         throw new Error("missing booking detail");
       }
-      const detailData = detail.booking;
+  const detailData = detail.booking;
       setEmployeeId(detailData.requesterEmpNo || "");
       setRequesterName(detailData.requesterName || "");
       setContactPhone(detailData.contactPhone || "");
@@ -1275,7 +1275,21 @@ export default function RentalBookingPage() {
       }
 
       if (detailData.additionalEmails?.length) {
-        setAdditionalEmails(detailData.additionalEmails);
+        const blockedEmail = (process.env.NEXT_PUBLIC_DEFAULT_SYSTEM_EMAIL || "").trim().toLowerCase();
+        const filteredEmails = detailData.additionalEmails.filter((email) => {
+            if (!email) {
+              return false;
+            }
+            const normalized = email.trim().toLowerCase();
+            if (normalized === (detailData.contactEmail || "").trim().toLowerCase()) {
+              return false;
+            }
+            if (blockedEmail && normalized === blockedEmail) {
+              return false;
+            }
+            return true;
+          });
+        setAdditionalEmails(filteredEmails.length ? filteredEmails : [""]);
       } else {
         setAdditionalEmails([""]);
       }
