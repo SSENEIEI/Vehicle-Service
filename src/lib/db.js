@@ -1,13 +1,79 @@
 import mysql from 'mysql2/promise';
 import bcrypt from 'bcryptjs';
 
-const DATABASE_NAME = (process.env.DB_DATABASE || 'vehicle_service').trim() || 'vehicle_service';
-const HOST = process.env.DB_HOST || 'localhost';
-const PORT = Number(process.env.DB_PORT || 3306);
-const USERNAME = process.env.DB_USERNAME || 'root';
-const PASSWORD = process.env.DB_PASSWORD || '';
+const RAW_DATABASE_URL = (process.env.DATABASE_URL || '').trim();
+let resolvedDatabase = (process.env.DB_DATABASE || 'vehicle_service').trim() || 'vehicle_service';
+let resolvedHost = process.env.DB_HOST || 'localhost';
+let resolvedPort = Number(process.env.DB_PORT || 3306);
+let resolvedUser = process.env.DB_USERNAME || 'root';
+let resolvedPassword = process.env.DB_PASSWORD || '';
+let resolvedUseSSL = process.env.DB_SSL === 'true';
+let resolvedRejectUnauthorized;
+
+if (process.env.DB_SSL_REJECT_UNAUTHORIZED === 'true') {
+  resolvedRejectUnauthorized = true;
+} else if (process.env.DB_SSL_REJECT_UNAUTHORIZED === 'false') {
+  resolvedRejectUnauthorized = false;
+}
+
+if (RAW_DATABASE_URL) {
+  try {
+    const url = new URL(RAW_DATABASE_URL);
+    if (url.hostname) {
+      resolvedHost = url.hostname;
+    }
+    if (url.port) {
+      resolvedPort = Number(url.port);
+    }
+    if (url.username) {
+      resolvedUser = decodeURIComponent(url.username);
+    }
+    if (url.password) {
+      resolvedPassword = decodeURIComponent(url.password);
+    }
+    const databaseName = url.pathname ? url.pathname.replace(/^\//, '') : '';
+    if (databaseName) {
+      resolvedDatabase = databaseName;
+    }
+
+    const sslMode =
+      url.searchParams.get('ssl-mode') ||
+      url.searchParams.get('ssl') ||
+      url.searchParams.get('sslmode');
+    if (typeof process.env.DB_SSL === 'undefined') {
+      if (sslMode) {
+        const normalized = sslMode.toLowerCase();
+        resolvedUseSSL = normalized !== 'disable' && normalized !== 'false';
+      } else if (url.hostname.endsWith('tidbcloud.com')) {
+        resolvedUseSSL = true;
+      }
+    }
+
+    if (typeof resolvedRejectUnauthorized === 'undefined') {
+      if (url.searchParams.has('sslmode') || url.searchParams.has('ssl-mode')) {
+        const mode = (url.searchParams.get('sslmode') || url.searchParams.get('ssl-mode') || '').toLowerCase();
+        resolvedRejectUnauthorized = !['disable', 'false'].includes(mode);
+      } else if (url.hostname.endsWith('tidbcloud.com')) {
+        resolvedRejectUnauthorized = true;
+      }
+    }
+  } catch (error) {
+    console.warn('[db] Failed to parse DATABASE_URL', error);
+  }
+}
+
+const DATABASE_NAME = resolvedDatabase;
+const HOST = resolvedHost;
+const PORT = resolvedPort;
+const USERNAME = resolvedUser;
+const PASSWORD = resolvedPassword;
 const POOL_SIZE = Number(process.env.DB_POOL_SIZE || 10);
-const USE_SSL = process.env.DB_SSL === 'true';
+const USE_SSL = resolvedUseSSL;
+const SSL_REJECT_UNAUTHORIZED =
+  typeof resolvedRejectUnauthorized === 'boolean'
+    ? resolvedRejectUnauthorized
+    : HOST.endsWith('tidbcloud.com');
+const USING_CONNECTION_URI = Boolean(RAW_DATABASE_URL);
 
 let pool;
 let schemaInitialized = false;
@@ -25,7 +91,10 @@ function buildPoolConfig(includeDatabase = true) {
   };
 
   if (USE_SSL) {
-    config.ssl = { rejectUnauthorized: false };
+    config.ssl = {
+      minVersion: 'TLSv1.2',
+      rejectUnauthorized: SSL_REJECT_UNAUTHORIZED,
+    };
   }
 
   if (includeDatabase) {
@@ -36,6 +105,9 @@ function buildPoolConfig(includeDatabase = true) {
 }
 
 async function ensureDatabaseExists() {
+  if (USING_CONNECTION_URI) {
+    return;
+  }
   const connection = await mysql.createConnection(buildPoolConfig(false));
   try {
     await connection.query(
@@ -48,7 +120,9 @@ async function ensureDatabaseExists() {
 
 async function ensurePool() {
   if (pool) return pool;
-  await ensureDatabaseExists();
+  if (!USING_CONNECTION_URI) {
+    await ensureDatabaseExists();
+  }
   pool = mysql.createPool(buildPoolConfig(true));
   return pool;
 }
@@ -122,7 +196,7 @@ export async function initDatabase({ seed = true } = {}) {
         await db.query(sql);
       } catch (error) {
         const message = String(error?.message || '');
-        if (!/exists|duplicate/i.test(message)) {
+        if (!/exist|duplicate/i.test(message)) {
           throw error;
         }
       }
@@ -239,6 +313,9 @@ export async function initDatabase({ seed = true } = {}) {
         contact_phone VARCHAR(32) NOT NULL,
         contact_email VARCHAR(160) NOT NULL,
         cargo_details TEXT NULL,
+  rental_company VARCHAR(180) NULL,
+  rental_cost DECIMAL(12,2) NULL,
+  rental_payment_type VARCHAR(60) NULL,
         ga_driver_id INT NULL,
         ga_driver_name VARCHAR(120) NULL,
         ga_driver_phone VARCHAR(32) NULL,
@@ -257,6 +334,19 @@ export async function initDatabase({ seed = true } = {}) {
         CONSTRAINT fk_bookings_vehicle FOREIGN KEY (ga_vehicle_id) REFERENCES company_vehicles(id) ON DELETE SET NULL,
         CONSTRAINT fk_bookings_driver FOREIGN KEY (ga_driver_id) REFERENCES company_drivers(id) ON DELETE SET NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await exec(`
+      ALTER TABLE bookings
+      ADD COLUMN IF NOT EXISTS rental_company VARCHAR(180) NULL AFTER cargo_details
+    `);
+    await exec(`
+      ALTER TABLE bookings
+      ADD COLUMN IF NOT EXISTS rental_cost DECIMAL(12,2) NULL AFTER rental_company
+    `);
+    await exec(`
+      ALTER TABLE bookings
+      ADD COLUMN IF NOT EXISTS rental_payment_type VARCHAR(60) NULL AFTER rental_cost
     `);
 
     await exec(`
@@ -440,7 +530,11 @@ export async function query(sql, params = []) {
   } catch (error) {
     const code = error?.code || '';
     const message = String(error?.message || '');
-    const missingSchema = code === 'ER_NO_SUCH_TABLE' || code === 'ER_BAD_DB_ERROR' || message.includes('Unknown database');
+    const missingSchema =
+      code === 'ER_NO_SUCH_TABLE' ||
+      code === 'ER_BAD_DB_ERROR' ||
+      code === 'ER_BAD_FIELD_ERROR' ||
+      message.includes('Unknown database');
 
     if (missingSchema) {
       schemaInitialized = false;
