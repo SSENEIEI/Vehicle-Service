@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import nodemailer from "nodemailer";
 import sgMail from "@sendgrid/mail";
 import { initDatabase, query } from "@/lib/db";
+import { ensureRentalSupportColumns } from "@/lib/rentalBookingSchema";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -322,41 +323,6 @@ async function syncBookingPoints(bookingId, pickupPoint, dropOffPoints = []) {
 
 function invalidResponse(message, status = 400) {
   return NextResponse.json({ error: message }, { status });
-}
-
-async function ensureRentalSupportColumns() {
-  const rows = await query(
-    `SELECT COLUMN_NAME AS columnName
-       FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = 'bookings'
-        AND COLUMN_NAME IN ('rental_company', 'rental_cost', 'rental_payment_type')`
-  );
-
-  const existing = new Set(
-    rows.map((row) => String(row?.columnName || row?.COLUMN_NAME || "").toLowerCase())
-  );
-
-  if (!existing.has("rental_company")) {
-    await query(
-      `ALTER TABLE bookings
-       ADD COLUMN rental_company VARCHAR(180) NULL AFTER contact_email`
-    );
-  }
-
-  if (!existing.has("rental_cost")) {
-    await query(
-      `ALTER TABLE bookings
-       ADD COLUMN rental_cost DECIMAL(12,2) NULL AFTER rental_company`
-    );
-  }
-
-  if (!existing.has("rental_payment_type")) {
-    await query(
-      `ALTER TABLE bookings
-       ADD COLUMN rental_payment_type VARCHAR(60) NULL AFTER rental_cost`
-    );
-  }
 }
 
 export async function GET(request) {
@@ -974,9 +940,9 @@ export async function POST(request) {
         contactPhone,
         contactEmail,
         cargoDetails || null,
-        null,
-        null,
-        null,
+        rentalCompany || null,
+        rentalCost,
+        rentalPaymentType || null,
         requesterName,
       ]
     );
@@ -1048,7 +1014,14 @@ export async function POST(request) {
         bookingId,
         requesterName || employeeId,
         "created",
-        JSON.stringify({ contactPhone, contactEmail, additionalEmails }),
+        JSON.stringify({
+          contactPhone,
+          contactEmail,
+          additionalEmails,
+          rentalCompany: rentalCompany || null,
+          rentalCost,
+          rentalPaymentType: rentalPaymentType || null,
+        }),
       ]
     );
 

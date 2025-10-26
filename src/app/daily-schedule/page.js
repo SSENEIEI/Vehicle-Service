@@ -1,6 +1,7 @@
 import DashboardShell from "@/components/DashboardShell";
 import { menuItems } from "@/lib/menuItems";
 import { initDatabase, query } from "@/lib/db";
+import { ensureRentalSupportColumns } from "@/lib/rentalBookingSchema";
 import DailyScheduleStatusControl from "./DailyScheduleStatusControl";
 import {
   ensureDailyScheduleStatusTable,
@@ -298,25 +299,59 @@ function normalizeText(value) {
   return value ? value : "—";
 }
 
+const currencyFormatter = new Intl.NumberFormat("th-TH", {
+  style: "currency",
+  currency: "THB",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+function formatCurrencyValue(value) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const numeric = Number.parseFloat(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+  return currencyFormatter.format(numeric);
+}
+
+function formatRentalPaymentLabel(value) {
+  if (!value) {
+    return null;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === "credit_term") {
+    return "Credit term";
+  }
+  if (normalized === "advance") {
+    return "Advance";
+  }
+  return value;
+}
+
 async function fetchDailyScheduleData(targetDateStr) {
   const bookingRows = await query(
-    `SELECT b.id,
-        b.booking_type AS bookingType,
-        b.reference_code AS referenceCode,
-        b.ga_vehicle_type AS vehicleType,
-        b.ga_status AS gaStatus,
-        b.ga_driver_name AS gaDriverName,
-        b.ga_driver_phone AS gaDriverPhone,
-        b.requester_name AS requesterName,
-        b.rental_company AS rentalCompany,
-        factories.name AS factoryName,
-        departments.name AS departmentName,
-        divisions.name AS divisionName,
-        cv.name AS vehicleName,
-        cv.registration AS vehicleRegistration,
-        cd.name AS driverRecordName,
-        cd.phone AS driverRecordPhone,
-        earliest.first_depart_time AS firstDepartTime
+  `SELECT b.id,
+    b.booking_type AS bookingType,
+    b.reference_code AS referenceCode,
+    b.ga_vehicle_type AS vehicleType,
+    b.ga_status AS gaStatus,
+    b.ga_driver_name AS gaDriverName,
+    b.ga_driver_phone AS gaDriverPhone,
+    b.requester_name AS requesterName,
+    b.rental_company AS rentalCompany,
+    b.rental_cost AS rentalCost,
+    b.rental_payment_type AS rentalPaymentType,
+    factories.name AS factoryName,
+    departments.name AS departmentName,
+    divisions.name AS divisionName,
+    cv.name AS vehicleName,
+    cv.registration AS vehicleRegistration,
+    cd.name AS driverRecordName,
+    cd.phone AS driverRecordPhone,
+    earliest.first_depart_time AS firstDepartTime
     FROM bookings b
     LEFT JOIN factories ON factories.id = b.factory_id
     LEFT JOIN divisions ON divisions.id = b.division_id
@@ -407,6 +442,11 @@ async function fetchDailyScheduleData(targetDateStr) {
       vehicleName: row.vehicleName,
       vehicleRegistration: row.vehicleRegistration,
       rentalCompany: row.rentalCompany,
+      rentalCost:
+        row.rentalCost !== null && row.rentalCost !== undefined
+          ? Number.parseFloat(row.rentalCost)
+          : null,
+      rentalPaymentType: row.rentalPaymentType || null,
       gaStatus: row.gaStatus,
       driverName: row.gaDriverName || row.driverRecordName || null,
       driverPhone: row.gaDriverPhone || row.driverRecordPhone || null,
@@ -445,6 +485,7 @@ export default async function DailySchedulePage({ searchParams }) {
   const selectedDateLabel = formatThaiDate(selectedDate);
 
   await initDatabase();
+  await ensureRentalSupportColumns();
   await ensureDailyScheduleStatusTable();
   const allBookings = await fetchDailyScheduleData(selectedDateStr);
   const filteredBookings = filterType === "all"
@@ -711,6 +752,55 @@ export default async function DailySchedulePage({ searchParams }) {
                     const pickupCells = [];
                     for (let index = 0; index < maxPickupPoints; index += 1) {
                       const point = booking.pickups[index];
+                      const rentalDetailSegments = [];
+                      if (index === 0 && booking.bookingType === "rental") {
+                        if (booking.rentalCompany) {
+                          rentalDetailSegments.push(`บริษัทรถเช่า: ${booking.rentalCompany}`);
+                        }
+                        const formattedCost = formatCurrencyValue(booking.rentalCost);
+                        if (formattedCost) {
+                          rentalDetailSegments.push(`ค่าใช้จ่ายรถเช่า: ${formattedCost}`);
+                        }
+                        const paymentLabel = formatRentalPaymentLabel(booking.rentalPaymentType);
+                        if (paymentLabel) {
+                          rentalDetailSegments.push(`ประเภทการจ่าย: ${paymentLabel}`);
+                        }
+                      }
+                      const detailContent = (() => {
+                        const baseDetail = formatPointDetail(point);
+                        if (rentalDetailSegments.length === 0) {
+                          return baseDetail;
+                        }
+                        const contentParts = [];
+                        if (baseDetail && baseDetail !== "—") {
+                          contentParts.push(
+                            <span key="base-detail">{baseDetail}</span>
+                          );
+                        }
+                        contentParts.push(
+                          <div
+                            key="rental-detail"
+                            style={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "2px",
+                              fontSize: "12px",
+                              color: colors.textMuted,
+                            }}
+                          >
+                            {rentalDetailSegments.map((segment, detailIndex) => (
+                              <span key={`rental-segment-${detailIndex}`}>{segment}</span>
+                            ))}
+                          </div>
+                        );
+                        return (
+                          <div
+                            style={{ display: "flex", flexDirection: "column", gap: "4px" }}
+                          >
+                            {contentParts}
+                          </div>
+                        );
+                      })();
                       pickupCells.push(
                         <td key={`pickup-time-${booking.id}-${index}`} style={dashboardStyles.tableCell}>
                           {point ? formatTimeValue(point.departTime) : "—"}
@@ -719,7 +809,7 @@ export default async function DailySchedulePage({ searchParams }) {
                           {normalizeText(point?.locationName)}
                         </td>,
                         <td key={`pickup-detail-${booking.id}-${index}`} style={dashboardStyles.tableCell}>
-                          {formatPointDetail(point)}
+                          {detailContent}
                         </td>,
                         <td key={`pickup-note-${booking.id}-${index}`} style={dashboardStyles.tableCell}>
                           {normalizeText(point?.note)}
