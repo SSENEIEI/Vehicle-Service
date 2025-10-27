@@ -10,6 +10,7 @@ import {
   FaRotateRight,
 } from 'react-icons/fa6';
 import { fetchJSON } from '@/lib/http';
+import { normalizeRole } from '@/lib/menuItems';
 
 const colors = {
   primary: '#0c4aa1',
@@ -396,6 +397,8 @@ export default function RepairTrackingClient() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [expandedDocumentRowId, setExpandedDocumentRowId] = useState(null);
+  const [currentRole, setCurrentRole] = useState('');
+  const [currentVendorUsername, setCurrentVendorUsername] = useState('');
 
   const loadData = useCallback(async (withSpinner = true) => {
     if (withSpinner) {
@@ -457,6 +460,36 @@ export default function RepairTrackingClient() {
   }, []);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const storedRole = window.localStorage.getItem('userRole');
+        if (storedRole) {
+          setCurrentRole(normalizeRole(storedRole));
+        } else {
+          setCurrentRole('');
+        }
+      } catch (roleError) {
+        console.warn('Failed to restore role for repair tracking', roleError);
+        setCurrentRole('');
+      }
+
+      try {
+        const storedProfile = window.localStorage.getItem('userProfile');
+        if (storedProfile) {
+          const parsed = JSON.parse(storedProfile);
+          const usernameCandidate = parsed?.username || parsed?.name || parsed?.displayName;
+          setCurrentVendorUsername(String(usernameCandidate || '').trim());
+        } else {
+          setCurrentVendorUsername('');
+        }
+      } catch (profileError) {
+        console.warn('Failed to restore user profile for repair tracking', profileError);
+        setCurrentVendorUsername('');
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     loadData(true);
   }, [loadData]);
 
@@ -468,8 +501,19 @@ export default function RepairTrackingClient() {
     const normalizedTerm = searchTerm.trim().toLowerCase();
     const start = parseDateOnly(startDate);
     const end = parseDateOnly(endDate);
+    const restrictToVendor = currentRole === 'vendor';
+    const vendorUsernameNormalized = restrictToVendor
+      ? String(currentVendorUsername || '').trim().toLowerCase()
+      : '';
 
     return repairs.filter((row) => {
+      if (restrictToVendor) {
+        const rowVendor = String(row.assignedVendorUsername || '').trim().toLowerCase();
+        if (!vendorUsernameNormalized || rowVendor !== vendorUsernameNormalized) {
+          return false;
+        }
+      }
+
       const valuesToSearch = [
         row.repairCode,
         row.vehicleRegistration,
@@ -510,9 +554,11 @@ export default function RepairTrackingClient() {
 
       return true;
     });
-  }, [repairs, searchTerm, startDate, endDate]);
+  }, [repairs, searchTerm, startDate, endDate, currentRole, currentVendorUsername]);
 
   const filteredSummary = useMemo(() => buildSummary(filteredRepairs), [filteredRepairs]);
+
+  const isVendorView = currentRole === 'vendor';
 
   const hasActiveFilters = Boolean(
     searchTerm.trim() || startDate || endDate
@@ -832,7 +878,8 @@ export default function RepairTrackingClient() {
                           onChange={(event) => handleVendorAssign(row.id, event.target.value)}
                           disabled={
                             assigningVendorRowId === row.id ||
-                            (vendorOptions.length === 0 && !row.assignedVendorUsername)
+                            (vendorOptions.length === 0 && !row.assignedVendorUsername) ||
+                            isVendorView
                           }
                         >
                           <option value="">
