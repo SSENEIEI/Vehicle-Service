@@ -1,0 +1,30 @@
+{
+  "menu": {
+    "backToMain": "กลับเมนูหลัก",
+    "title": "เมนู",
+    "empty": "ไม่มีเมนูที่สามารถเข้าถึงได้",
+    "companyBooking": "จองรถบริษัทฯ",
+    "rentalBooking": "จองรถเช่า",
+    "repair": "ซ่อมรถ",
+    "dailySchedule": "แผนจัดรถประจำวัน",
+    "overallPlan": "แผนการใช้รถภาพรวม",
+    "fleetStaff": "รถและพนักงานบริษัทฯ",
+    "userManagement": "จัดการผู้ใช้"
+  },
+  "language": {
+    "english": "EN",
+    "thai": "TH"
+  },
+  "common": {
+    "welcome": "ยินดีต้อนรับ",
+    "loading": "กำลังโหลดข้อมูล...",
+    "error": "เกิดข้อผิดพลาด",
+    "noData": "ยังไม่มีข้อมูล"
+  },
+  "actions": {
+    "refresh": "รีเฟรช",
+    "export": "ส่งออก",
+    "close": "ปิด",
+    "save": "บันทึก"
+  }
+}

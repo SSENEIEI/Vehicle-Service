@@ -871,32 +871,7 @@ export default function RepairTrackingClient() {
                         </span>
                       </td>
                       <td style={layoutStyles.tableCell}>{row.reporterName || '-'}</td>
-                      <td style={layoutStyles.tableCell}>
-                        <select
-                          style={layoutStyles.select}
-                          value={row.assignedVendorUsername || ''}
-                          onChange={(event) => handleVendorAssign(row.id, event.target.value)}
-                          disabled={
-                            assigningVendorRowId === row.id ||
-                            (vendorOptions.length === 0 && !row.assignedVendorUsername) ||
-                            isVendorView
-                          }
-                        >
-                          <option value="">
-                            {vendorOptions.length === 0 ? 'ไม่มีอู่/ศูนย์บริการที่พร้อมใช้งาน' : 'เลือกอู่/ศูนย์บริการ'}
-                          </option>
-                          {!hasActiveVendor && row.assignedVendorUsername && (
-                            <option value={row.assignedVendorUsername}>
-                              {row.assignedVendorUsername} (ไม่พบบัญชีอู่/ศูนย์บริการ)
-                            </option>
-                          )}
-                          {vendorOptions.map((vendor) => (
-                            <option key={vendor.key} value={vendor.username}>
-                              {vendor.username}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
+                      <td style={layoutStyles.tableCell}>{row.assignedVendorUsername || '-'}</td>
                       <td style={layoutStyles.tableCell}>{formatDateLabel(row.reportDate)}</td>
                       <td style={layoutStyles.tableCell}>{formatDateLabel(row.etaDate)}</td>
                       <td style={layoutStyles.tableCell}>

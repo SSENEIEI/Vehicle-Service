@@ -6,6 +6,7 @@ import Link from "next/link";
 import { FaArrowLeft, FaBars, FaTimes } from "react-icons/fa";
 import { FaChevronRight } from "react-icons/fa6";
 import { DEFAULT_ROLE, ROLE_LABELS, getMenuItemsForRole, normalizeRole } from "@/lib/menuItems";
+import { useTranslation } from "@/lib/i18n";
 
 const colors = {
   primary: "#0c4aa1",
@@ -168,6 +169,7 @@ export default function DashboardShell({
     department: "",
     factory: "",
   });
+  const { language, setLanguage, t } = useTranslation();
 
   useEffect(() => {
     try {
@@ -275,15 +277,19 @@ export default function DashboardShell({
     <>
       <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
         <button type="button" style={styles.backButton} onClick={() => router.push("/")}>
-          <FaArrowLeft /> กลับเมนูหลัก
+          <FaArrowLeft /> {t("menu.backToMain", "กลับเมนูหลัก")}
         </button>
-        <button type="button" style={styles.languageToggle}>
-          EN
+        <button
+          type="button"
+          style={styles.languageToggle}
+          onClick={() => setLanguage(language === "th" ? "en" : "th")}
+        >
+          {language === "th" ? t("language.english", "EN") : t("language.thai", "TH")}
         </button>
       </div>
 
       <div>
-        <p style={styles.menuTitle}>เมนู</p>
+        <p style={styles.menuTitle}>{t("menu.title", "เมนู")}</p>
         <ul style={styles.menuList}>
           {visibleMenuItems.length === 0 ? (
             <li
@@ -294,7 +300,7 @@ export default function DashboardShell({
                 pointerEvents: "none",
               }}
             >
-              ไม่มีเมนูที่สามารถเข้าถึงได้
+              {t("menu.empty", "ไม่มีเมนูที่สามารถเข้าถึงได้")}
             </li>
           ) : (
             visibleMenuItems.map((item) => {
@@ -307,7 +313,7 @@ export default function DashboardShell({
                     href={item.path}
                     style={{ flex: 1, color: "inherit", textDecoration: "none" }}
                   >
-                    {item.label}
+                    {item.translationKey ? t(item.translationKey, item.label) : item.label}
                   </Link>
                   {isActive ? <FaChevronRight size={14} /> : null}
                 </li>
@@ -353,7 +359,9 @@ export default function DashboardShell({
               Vehicle Service <span style={{ fontWeight: "600" }}>{headerSubtitle}</span>
             </div>
           </div>
-          <p style={styles.welcome}>ยินดีต้อนรับ {welcomeText}</p>
+          <p style={styles.welcome}>
+            {t("common.welcome", "ยินดีต้อนรับ")} {welcomeText}
+          </p>
         </header>
 
         <div style={styles.body}>{children}</div>

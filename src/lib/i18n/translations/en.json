@@ -1,0 +1,30 @@
+{
+  "menu": {
+    "backToMain": "Back to main menu",
+    "title": "Menu",
+    "empty": "No accessible items",
+    "companyBooking": "Company vehicle booking",
+    "rentalBooking": "Rental booking",
+    "repair": "Repair",
+    "dailySchedule": "Daily schedule",
+    "overallPlan": "Overall plan",
+    "fleetStaff": "Vehicles & staff",
+    "userManagement": "User management"
+  },
+  "language": {
+    "english": "EN",
+    "thai": "TH"
+  },
+  "common": {
+    "welcome": "Welcome",
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "noData": "No data available"
+  },
+  "actions": {
+    "refresh": "Refresh",
+    "export": "Export",
+    "close": "Close",
+    "save": "Save"
+  }
+}
