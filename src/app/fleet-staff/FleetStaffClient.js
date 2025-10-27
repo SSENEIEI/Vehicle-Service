@@ -124,6 +124,8 @@ const styles = {
     justifyContent: "center",
     borderRadius: "16px",
     background: "linear-gradient(135deg, #f5f6fb 0%, #ffffff 100%)",
+    overflow: "hidden",
+    padding: "12px",
   },
   cardTitle: {
     fontSize: "18px",
@@ -341,7 +343,7 @@ export default function FleetStaffClient() {
                           alt={vehicle.name || "รถบริษัท"}
                           width={320}
                           height={180}
-                          style={{ width: "80%", height: "auto", objectFit: "contain" }}
+                          style={{ width: "100%", height: "100%", objectFit: "contain" }}
                         />
                       </div>
                       <h3 style={styles.cardTitle}>{vehicle.name || "รถบริษัท"}</h3>
