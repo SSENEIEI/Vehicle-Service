@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { normalizeRole } from "@/lib/menuItems";
 import Image from "next/image";
 
 const styles = {
@@ -150,6 +151,7 @@ export default function Home() {
         return;
       }
 
+      let normalizedRole = "user";
       try {
         if (payload?.token) {
           localStorage.setItem("token", payload.token);
@@ -157,7 +159,8 @@ export default function Home() {
         if (payload?.user) {
           localStorage.setItem("userProfile", JSON.stringify(payload.user));
           const roleValue = payload.user.role || "admin";
-          localStorage.setItem("userRole", roleValue);
+          normalizedRole = normalizeRole(roleValue);
+          localStorage.setItem("userRole", normalizedRole);
         }
       } catch (storageError) {
         console.error("Persisting login session failed", storageError);
@@ -166,7 +169,8 @@ export default function Home() {
       window.alert("เข้าสู่ระบบสำเร็จ");
       setFeedback({ type: "success", text: "ลงชื่อเข้าใช้สำเร็จ" });
       setFormData({ username: "", password: "" });
-      window.location.href = "/company-booking";
+      const redirectPath = normalizedRole === "vendor" ? "/repair" : "/company-booking";
+      window.location.href = redirectPath;
     } catch (error) {
       console.error("Login request failed", error);
       setFeedback({ type: "error", text: "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง" });
