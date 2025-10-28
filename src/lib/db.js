@@ -464,6 +464,8 @@ export async function initDatabase({ seed = true } = {}) {
         completed_date DATE NULL,
         status ENUM('pending', 'waiting_repair', 'completed') NOT NULL DEFAULT 'pending',
         garage_id INT NULL,
+  assigned_vendor_username VARCHAR(120) NULL,
+  is_bidding_open TINYINT(1) NOT NULL DEFAULT 1,
         cost_items JSON NULL,
         subtotal DECIMAL(12,2) NOT NULL DEFAULT 0,
         vat_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
@@ -475,6 +477,25 @@ export async function initDatabase({ seed = true } = {}) {
         KEY idx_repair_requests_status (status),
         KEY idx_repair_requests_garage (garage_id),
         CONSTRAINT fk_repair_requests_garage FOREIGN KEY (garage_id) REFERENCES repair_garages(id) ON DELETE SET NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await exec(`
+      CREATE TABLE IF NOT EXISTS repair_bids (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        repair_request_id BIGINT UNSIGNED NOT NULL,
+        vendor_username VARCHAR(120) NOT NULL,
+        quote_amount DECIMAL(12,2) NOT NULL,
+        attachment_name VARCHAR(255) NOT NULL,
+        attachment_mime VARCHAR(120) NOT NULL,
+        attachment_data LONGBLOB NOT NULL,
+        is_winner TINYINT(1) NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_repair_bid_vendor (repair_request_id, vendor_username),
+        KEY idx_repair_bids_request (repair_request_id),
+        KEY idx_repair_bids_vendor (vendor_username),
+        CONSTRAINT fk_repair_bids_request FOREIGN KEY (repair_request_id) REFERENCES repair_requests(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
@@ -509,6 +530,8 @@ export async function initDatabase({ seed = true } = {}) {
   await exec(`ALTER TABLE repair_requests ADD COLUMN IF NOT EXISTS garage_id INT NULL AFTER status`);
   await exec(`ALTER TABLE repair_requests ADD COLUMN IF NOT EXISTS completed_date DATE NULL AFTER eta_date`);
   await exec(`ALTER TABLE repair_requests ADD COLUMN IF NOT EXISTS created_by VARCHAR(120) NULL AFTER attachments`);
+  await exec(`ALTER TABLE repair_requests ADD COLUMN IF NOT EXISTS assigned_vendor_username VARCHAR(120) NULL AFTER garage_id`);
+  await exec(`ALTER TABLE repair_requests ADD COLUMN IF NOT EXISTS is_bidding_open TINYINT(1) NOT NULL DEFAULT 1 AFTER assigned_vendor_username`);
   await exec(`ALTER TABLE repair_requests ADD INDEX IF NOT EXISTS idx_repair_requests_status (status)`);
   await exec(`ALTER TABLE repair_requests ADD INDEX IF NOT EXISTS idx_repair_requests_garage (garage_id)`);
   await exec(`ALTER TABLE repair_requests ADD CONSTRAINT fk_repair_requests_garage FOREIGN KEY (garage_id) REFERENCES repair_garages(id) ON DELETE SET NULL`);

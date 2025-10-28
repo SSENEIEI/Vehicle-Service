@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS `repair_requests` (
   `status` ENUM('pending', 'waiting_repair', 'completed') NOT NULL DEFAULT 'pending',
   `garage_id` INT NULL,
   `assigned_vendor_username` VARCHAR(120) NULL,
+  `is_bidding_open` TINYINT(1) NOT NULL DEFAULT 1,
   `cost_items` JSON NULL,
   `subtotal` DECIMAL(12,2) NOT NULL DEFAULT 0,
   `vat_amount` DECIMAL(12,2) NOT NULL DEFAULT 0,
@@ -225,6 +226,23 @@ CREATE TABLE IF NOT EXISTS `booking_history` (
   `details` TEXT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT `fk_booking_history_booking` FOREIGN KEY (`booking_id`) REFERENCES `bookings`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `repair_bids` (
+  `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `repair_request_id` BIGINT UNSIGNED NOT NULL,
+  `vendor_username` VARCHAR(120) NOT NULL,
+  `quote_amount` DECIMAL(12,2) NOT NULL,
+  `attachment_name` VARCHAR(255) NOT NULL,
+  `attachment_mime` VARCHAR(120) NOT NULL,
+  `attachment_data` LONGBLOB NOT NULL,
+  `is_winner` TINYINT(1) NOT NULL DEFAULT 0,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `uniq_repair_bid_vendor` (`repair_request_id`, `vendor_username`),
+  KEY `idx_repair_bids_request` (`repair_request_id`),
+  KEY `idx_repair_bids_vendor` (`vendor_username`),
+  CONSTRAINT `fk_repair_bids_request` FOREIGN KEY (`repair_request_id`) REFERENCES `repair_requests`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `daily_schedule_statuses` (
